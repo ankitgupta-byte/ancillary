@@ -1,0 +1,2364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flights Ancillaries – Attach & Margin Deep Dive</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  @page { size: 1600px 900px; margin: 0; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #05070f;
+    color: #eef2ff;
+    display: flex; flex-direction: column; align-items: safe center;
+    gap: 40px; padding: 40px 0;
+  }
+  #deck { display: flex; flex-direction: column; gap: 40px; }
+  @media print { #deck { gap: 0; zoom: 1 !important; } }
+  @media print { body { padding: 0; gap: 0; background: none; } }
+  body.single { padding: 0; gap: 0; }
+  body.single .slide { border-radius: 0; }
+
+  /* Catalog slide */
+  .catalog .cat-body { display: grid; grid-template-rows: auto 1fr; gap: 18px; min-height: 0; position: relative; z-index: 1; }
+  .cat-strip { display: flex; align-items: center; gap: 14px; padding: 14px 22px; }
+  .cat-strip .cs { flex: 1; display: flex; flex-direction: column; padding: 8px 16px; border-radius: 14px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); }
+  .cat-strip .cs b { font-size: 22px; font-weight: 800; color: var(--accent); }
+  .cat-strip .cs span { font-size: 12px; color: #9aa6cc; margin-top: 2px; }
+  .cat-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: 1fr 1fr; gap: 16px; min-height: 0; }
+  .pcard { --c: var(--accent); display: grid; grid-template-columns: 130px 1fr; gap: 14px; padding: 14px; min-height: 0; }
+  .pcard .p-img { border-radius: 14px; overflow: hidden; background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--c) 30%, transparent), transparent 70%); border: 1px solid rgba(255,255,255,.1); }
+  .pcard .p-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pcard .p-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .pcard .p-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .pcard .p-name { font-size: 19px; font-weight: 800; color: var(--c); text-shadow: 0 0 16px color-mix(in srgb, var(--c) 40%, transparent); }
+  .pcard .p-tag { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+                  color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); background: color-mix(in srgb, var(--c) 10%, transparent); }
+  .pcard .p-desc { font-size: 13px; line-height: 1.45; color: #d6ddf5; }
+  .pcard .p-stats { margin-top: auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .pcard .p-stats div { padding: 7px 8px; min-width: 0; border-radius: 12px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); }
+  .pcard .p-stats b { display: block; font-size: 15px; white-space: nowrap; font-weight: 800; }
+  .pcard .p-stats span { font-size: 9.5px; color: #9aa6cc; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+
+  /* Opportunity sizing slide */
+  .opp .op-body { display: grid; grid-template-rows: auto 1fr; gap: 16px; min-height: 0; position: relative; z-index: 1; }
+  .op-top { display: grid; grid-template-columns: 2.3fr 1fr; gap: 16px; min-height: 0; }
+  .op-bars { padding: 14px 20px; display: flex; flex-direction: column; gap: 8px; }
+  .op-row { display: grid; grid-template-columns: 250px 1fr 92px 84px; align-items: center; gap: 14px; }
+  .op-row .op-name { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .op-row .op-name i { font-style: normal; width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #0a0f24; background: var(--c); flex: none; }
+  .op-track { position: relative; height: 22px; border-radius: 8px; background: rgba(255,255,255,.05); }
+  .op-track .rng { position: absolute; top: 9px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--c) 45%, transparent); }
+  .op-track .rng::before, .op-track .rng::after { content: ''; position: absolute; top: -5px; width: 2px; height: 14px; background: color-mix(in srgb, var(--c) 70%, transparent); }
+  .op-track .rng::before { left: 0; } .op-track .rng::after { right: 0; }
+  .op-track .mid { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 8px; background: linear-gradient(90deg, color-mix(in srgb, var(--c) 35%, transparent), var(--c)); box-shadow: 0 0 14px color-mix(in srgb, var(--c) 45%, transparent); }
+  .op-track .proven { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 8px; background: repeating-linear-gradient(45deg, rgba(255,255,255,.55) 0 4px, transparent 4px 8px); }
+  .op-row .op-v { font-size: 18px; font-weight: 800; text-align: right; color: var(--c); }
+  .op-row .op-y { font-size: 12.5px; color: #b6bfdc; text-align: right; }
+  .op-head { display: grid; grid-template-columns: 250px 1fr 92px 84px; gap: 14px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #8e9ac0; font-weight: 600; }
+  .op-head span:nth-child(n+3) { text-align: right; }
+  .op-legend { font-size: 11px; color: #9aa6cc; display: flex; gap: 18px; margin-top: 2px; }
+  .op-legend b { display: inline-block; width: 18px; height: 8px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+  .op-total { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .op-total .big { font-size: 40px; font-weight: 800; letter-spacing: -.02em; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .op-total .sub { font-size: 13px; color: #c3cbe6; line-height: 1.45; }
+  .op-total .sub b { color: #fff; }
+  .op-total .kv { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; font-size: 13px; color: #c3cbe6; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.1); }
+  .op-total .kv b { color: #fff; text-align: right; }
+  .op-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; min-height: 0; }
+  .ocard { --c: var(--accent); padding: 13px 14px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+  .ocard .oc-top { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; line-height: 1.2; }
+  .ocard .oc-top i { font-style: normal; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #0a0f24; background: var(--c); flex: none; }
+  .ocard .oc-v { font-size: 24px; font-weight: 800; color: var(--c); }
+  .ocard .oc-v small { font-size: 12px; color: #9aa6cc; font-weight: 500; margin-left: 4px; }
+  .ocard .oc-conf { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; align-self: flex-start;
+                    color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); background: color-mix(in srgb, var(--c) 10%, transparent); }
+  .ocard ul { list-style: none; display: flex; flex-direction: column; gap: 9px; margin-top: 4px; }
+  .ocard li { font-size: 12px; line-height: 1.4; color: #d6ddf5; padding-left: 12px; position: relative; }
+  .ocard li::before { content: ''; position: absolute; left: 0; top: 6px; width: 5px; height: 5px; border-radius: 2px; background: var(--c); }
+  .ocard li b { color: #fff; }
+
+  /* TravelSure sizing slide */
+  .ts .ts-body { display: grid; grid-template-rows: 1fr auto; gap: 16px; min-height: 0; position: relative; z-index: 1; }
+  .ts-row1 { display: grid; grid-template-columns: 1fr 1.25fr; gap: 16px; min-height: 0; }
+  .ts-row1 > *, .ts .ex-row2 > * { min-width: 0; }
+  .ts .p-desc { font-size: 12.5px; line-height: 1.45; color: #d6ddf5; margin-bottom: 10px; }
+  .ts .p-desc b { color: #fff; }
+  .abar { display: grid; grid-template-columns: 118px 1fr 44px; align-items: center; gap: 8px; margin-top: 5px; font-size: 12px; color: #c3cbe6; }
+  .abar .t { height: 12px; border-radius: 4px; background: rgba(255,255,255,.05); position: relative; }
+  .abar .t div { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
+  .abar b { text-align: right; color: #fff; font-size: 12px; }
+  .abar.partner .t div { background: repeating-linear-gradient(45deg, #fb7185 0 4px, #fb718566 4px 8px); }
+  .abar.ours .t div { background: linear-gradient(90deg, #22d3ee66, #22d3ee); }
+  .ts .sc th { text-align: right; }
+  .ts .sc td.lbl { color: #b6bfdc; }
+  .ts .sc tr.res td { font-size: 15px; font-weight: 800; border-top: 1px solid rgba(255,255,255,.18); color: var(--accent); }
+  .ts .sc tr.res td.lbl { color: #fff; font-size: 12.5px; }
+  .ts .sc th.base, .ts .sc td.base { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .sv { display: grid; grid-template-columns: 1fr 112px 34px; align-items: center; gap: 8px; font-size: 11.6px; color: #d6ddf5; padding: 2.5px 0; }
+  .sv .t { position: relative; height: 11px; }
+  .sv .t::before { content: ''; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: rgba(255,255,255,.25); }
+  .sv .t div { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+  .sv b { font-size: 11px; text-align: right; }
+  .sv .tag { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; margin-left: 6px; }
+  .sv .tag.paid { color: #fbbf24; border: 1px solid #fbbf2466; }
+  .sv .tag.adj { color: #f472b6; border: 1px solid #f472b666; }
+  .sv.hl { background: rgba(244,114,182,.08); border-radius: 6px; }
+
+  /* User survey slide */
+  .srv .srv-body { display: grid; grid-template-columns: 1.45fr 1fr; gap: 16px; min-height: 0; position: relative; z-index: 1; }
+  .srv .srv-right { display: grid; grid-template-rows: 1fr auto; gap: 16px; min-height: 0; }
+  .srv-tbl { display: flex; flex-direction: column; }
+  .srv-row { display: grid; grid-template-columns: 1fr 58px 58px 280px 52px 42px; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid rgba(255,255,255,.06); font-size: 14px; color: #dfe5fb; }
+  .srv-row.head { border-top: 0; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #8e9ac0; font-weight: 600; padding-top: 0; }
+  .srv-row > :nth-child(n+2) { text-align: right; }
+  .srv-row > :nth-child(4) { text-align: center; }
+  .srv-row .dim { color: #9aa6cc; }
+  .srv-row .t { position: relative; height: 16px; }
+  .srv-row .t::before { content: ''; position: absolute; left: 50%; top: -5px; bottom: -5px; width: 1px; background: rgba(255,255,255,.25); }
+  .srv-row .t div { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
+  .srv-row .pr { font-size: 11px; font-weight: 800; padding: 2px 0; border-radius: 6px; text-align: center; color: #0a0f24; }
+  .srv-row .tag { font-size: 9.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; margin-left: 8px; vertical-align: 1px; }
+  .srv-row .tag.paid { color: #fbbf24; border: 1px solid #fbbf2466; }
+  .srv-row .tag.adj { color: #f472b6; border: 1px solid #f472b666; }
+  .srv-row.hl { background: rgba(251,191,36,.07); }
+  .srv .mgrid { grid-template-columns: 1fr; }
+  .sb-tbl { display: flex; flex-direction: column; margin-top: 4px; }
+  .sb-row { display: grid; grid-template-columns: 330px 1fr 64px; align-items: center; gap: 14px; padding: 9px 0; font-size: 14.5px; color: #dfe5fb; }
+  .sb-row.sep { border-top: 1px solid rgba(255,255,255,.14); margin-top: 4px; padding-top: 13px; }
+  .sb-row.none { color: #9aa6cc; font-style: italic; }
+  .sb-row .t { height: 18px; border-radius: 5px; background: rgba(255,255,255,.05); position: relative; }
+  .sb-row .t div { position: absolute; inset: 0 auto 0 0; border-radius: 5px; box-shadow: 0 0 12px rgba(255,255,255,.08); }
+  .sb-row b { text-align: right; font-size: 15px; }
+  .sb-row .tag { font-size: 9.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; margin-left: 8px; border: 1px solid; vertical-align: 1px; font-style: normal; }
+  .srv-legend { display: flex; gap: 16px; font-size: 11px; color: #9aa6cc; margin-top: 10px; }
+
+  /* Waterfall slide */
+  .wf .wf-body { display: grid; grid-template-rows: 1fr auto; gap: 16px; min-height: 0; position: relative; z-index: 1; }
+  .wf-chart { padding: 16px 22px 12px; display: flex; flex-direction: column; min-height: 0; }
+  .wf-area { position: relative; flex: 1; display: grid; grid-template-columns: 46px 1fr; min-height: 0; }
+  .wf-axis { position: relative; }
+  .wf-axis span { position: absolute; right: 8px; transform: translateY(50%); font-size: 10.5px; color: #8e9ac0; }
+  .wf-plot { position: relative; display: grid; grid-template-columns: repeat(13, 1fr); border-left: 1px solid rgba(255,255,255,.15); }
+  .wf-grid { position: absolute; left: 0; right: 0; border-top: 1px dashed rgba(255,255,255,.08); }
+  .wf-col { position: relative; }
+  .wf-bar { position: absolute; left: 16%; right: 16%; border-radius: 6px; box-shadow: 0 0 16px color-mix(in srgb, var(--c) 40%, transparent); background: linear-gradient(180deg, var(--c), color-mix(in srgb, var(--c) 55%, transparent)); }
+  .wf-bar.total { background: linear-gradient(180deg, #e2e8f0, #64748b); box-shadow: none; }
+  .wf-bar.end { background: linear-gradient(180deg, var(--accent), var(--accent2)); box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 50%, transparent); }
+  .wf-bar.neg { background: repeating-linear-gradient(45deg, #fb718599 0 5px, #fb718533 5px 10px); box-shadow: none; }
+  .wf-bar.proven::after { content: ''; position: absolute; inset: 0; border-radius: 6px; background: repeating-linear-gradient(45deg, rgba(255,255,255,.45) 0 4px, transparent 4px 8px); }
+  .wf-link { position: absolute; left: 84%; width: 32%; border-top: 1px dashed rgba(255,255,255,.35); }
+  .wf-val { position: absolute; left: 0; right: 0; text-align: center; font-size: 13px; font-weight: 800; color: var(--c); }
+  .wf-val.big { font-size: 17px; color: #fff; }
+  .wf-names { display: grid; grid-template-columns: 46px repeat(13, 1fr); margin-top: 8px; }
+  .wf-name { text-align: center; font-size: 11.2px; line-height: 1.3; color: #dfe5fb; padding: 0 3px; }
+  .wf-name i { font-style: normal; display: inline-block; margin-top: 4px; font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; border: 1px solid; }
+  .wf-legend { display: flex; gap: 16px; font-size: 11px; color: #9aa6cc; margin-top: 10px; flex-wrap: wrap; }
+  .wf-legend b { display: inline-block; width: 12px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: middle; }
+  .wf-row2 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .wf-box { padding: 14px 18px; }
+  .wf-box .panel-title { margin-bottom: 6px; }
+  .wf-box p { font-size: 13px; line-height: 1.45; color: #d6ddf5; }
+  .wf-box p b { color: #fff; }
+
+  /* Growth levers slide */
+  .levers .lv-body { display: grid; grid-template-rows: auto 1fr; gap: 18px; min-height: 0; position: relative; z-index: 1; }
+  .formula { display: flex; align-items: center; gap: 14px; padding: 14px 22px; }
+  .formula .f-label { font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: #9aa6cc; font-weight: 600; margin-right: 6px; }
+  .formula .term { display: flex; flex-direction: column; padding: 8px 16px; border-radius: 14px; background: rgba(255,255,255,.06);
+                   border: 1px solid rgba(255,255,255,.12); min-width: 170px; }
+  .formula .term b { font-size: 15px; font-weight: 700; }
+  .formula .term span { font-size: 12px; color: #9aa6cc; margin-top: 2px; }
+  .formula .term em { font-style: normal; font-size: 11px; color: var(--accent); margin-top: 4px; font-weight: 600; }
+  .formula .op { font-size: 22px; color: #8e9ac0; font-weight: 300; }
+  .formula .term.res { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+  .formula .term.res b { font-size: 22px; color: var(--accent); }
+  .lv-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; min-height: 0; }
+  .lever { --c: var(--accent); padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .lever .lv-top { display: flex; align-items: center; gap: 10px; }
+  .lever .lv-n { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; font-size: 16px; color: #0a0f24;
+                 background: var(--c); box-shadow: 0 0 16px color-mix(in srgb, var(--c) 55%, transparent); flex: none; }
+  .lever .lv-title { font-size: 16px; font-weight: 700; line-height: 1.2; }
+  .lever .lv-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .lever .lv-tags span { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px;
+                         color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); background: color-mix(in srgb, var(--c) 10%, transparent); }
+  .lever .lv-stat { padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); }
+  .lever .lv-stat b { display: block; font-size: 26px; font-weight: 800; color: var(--c); letter-spacing: -.01em;
+                      text-shadow: 0 0 18px color-mix(in srgb, var(--c) 40%, transparent); }
+  .lever .lv-stat span { font-size: 12px; color: #b6bfdc; line-height: 1.35; display: block; margin-top: 3px; }
+  .lever h4 { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #8e9ac0; font-weight: 600; }
+  .lever ul { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .lever li { font-size: 12.5px; line-height: 1.4; color: #d6ddf5; padding-left: 14px; position: relative; }
+  .lever li::before { content: ''; position: absolute; left: 0; top: 6px; width: 6px; height: 6px; border-radius: 2px; background: var(--c); }
+  .lever .plays li::before { border-radius: 50%; }
+  .lever .lv-tests { margin-top: auto; font-size: 11.5px; color: #9aa6cc; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.1); line-height: 1.4; }
+  .lever .lv-tests b { color: #dfe5fb; font-weight: 600; }
+
+  /* Experiment slides */
+  .exp .body { grid-template-columns: 300px 1fr; }
+  .exp .hero { gap: 12px; padding: 18px; }
+  .exp .hero-img { height: 150px; }
+  .exp .meta { font-size: 11.5px; color: #9aa6cc; line-height: 1.5; }
+  .exp .meta b { color: #dfe5fb; font-weight: 600; }
+  .exp .kpi { padding: 10px 14px; }
+  .exp .kpi-value { font-size: 30px; }
+  .exp .kpi-row .kpi-value { font-size: 19px; }
+  .exp .kpi-row .kpi-sub { font-size: 11px; }
+  .exp .right { grid-template-rows: 322px 1fr; gap: 18px; }
+  .ex-row1 { display: grid; grid-template-columns: 1.3fr 1fr 1.1fr; gap: 16px; min-height: 0; }
+  .ex-row1 .span2 { grid-column: span 2; }
+  .xt.tight td { padding: 3px 0 3px 6px; font-size: 12px; }
+  .ex-row1 > *, .ex-row2 > *, .exp .right, .exp .body > * { min-width: 0; }
+  .ex-row2 { display: grid; grid-template-columns: 2.15fr 1fr; gap: 16px; min-height: 0; }
+  .xt { width: 100%; border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  .xt th { font-size: 10px; color: #8e9ac0; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; text-align: right; padding: 0 0 6px 6px; white-space: nowrap; }
+  .xt th:first-child, .xt td:first-child { text-align: left; padding-left: 0; }
+  .xt td { font-size: 12.5px; text-align: right; padding: 5px 0 5px 6px; border-top: 1px solid rgba(255,255,255,.06); color: #dfe5fb; white-space: nowrap; }
+  .xt td.dim { color: #9aa6cc; }
+  .xt tr.new td { color: #fff; font-weight: 600; }
+  .xt tr.new td:first-child { color: var(--accent); }
+  .xt tr.tot td { border-top: 1px solid rgba(255,255,255,.22); font-weight: 700; }
+  .xt .pos { color: #4ade80; } .xt .neg { color: #fb7185; } .xt .ns { color: #8e9ac0; }
+  .xt .dbar { display: inline-block; width: 46px; height: 8px; position: relative; vertical-align: middle; margin-left: 6px; }
+  .xt .dbar::before { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: rgba(255,255,255,.25); }
+  .xt .dbar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+  .models { padding: 16px 18px; display: flex; flex-direction: column; min-height: 0; }
+  .mgrid { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 10px; margin-top: 10px; flex: 1; min-height: 0; }
+  .mtile { border-radius: 14px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); padding: 11px 13px; display: flex; flex-direction: column; gap: 5px; }
+  .mtile .mq { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .mtile .mq b { font-size: 13px; font-weight: 700; }
+  .mtile .vd { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+  .vd.rej { color: #4ade80; background: rgba(74,222,128,.12); border: 1px solid rgba(74,222,128,.4); }
+  .vd.conf { color: #fb7185; background: rgba(251,113,133,.12); border: 1px solid rgba(251,113,133,.4); }
+  .vd.good { color: #22d3ee; background: rgba(34,211,238,.12); border: 1px solid rgba(34,211,238,.4); }
+  .vd.part { color: #fbbf24; background: rgba(251,191,36,.12); border: 1px solid rgba(251,191,36,.4); }
+  .mtile p { font-size: 11.5px; line-height: 1.4; color: #c3cbe6; }
+  .mtile p b { color: #fff; }
+  .exp .insights li { font-size: 12.5px; }
+  .exp .hero-img { height: 96px; }
+  .vol .vgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
+  .vol .vgrid div { display: flex; flex-direction: column; }
+  .vol .vgrid b { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .vol .vgrid span { font-size: 10.5px; color: #9aa6cc; line-height: 1.3; }
+  .vol .vfoot { font-size: 10.5px; color: #9aa6cc; margin-top: 6px; line-height: 1.35; }
+  .vol .vfoot b { color: #dfe5fb; font-weight: 600; }
+
+  /* Presentation mode: one slide at a time, scaled to the window */
+  body.present { height: 100vh; overflow: hidden; padding: 0; display: block; }
+  body.present #deck { position: absolute; left: 50%; top: 50%; width: 1600px; height: 900px; display: block;
+                       transform: translate(-50%, -50%) scale(var(--k, 1)); }
+  body.present .slide { display: none; }
+  body.present .slide.active { display: grid; }
+  body.present:fullscreen .slide, :fullscreen body.present .slide { border-radius: 0; }
+  .nav-btn { position: fixed; top: 50%; transform: translateY(-50%); z-index: 10; width: 52px; height: 52px; border-radius: 50%;
+             border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.08); color: #eef2ff; font-size: 22px;
+             backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); cursor: pointer; opacity: .35; transition: opacity .2s, background .2s; }
+  .nav-btn:hover { opacity: 1; background: rgba(255,255,255,.16); }
+  .nav-btn:disabled { opacity: .08; cursor: default; }
+  .nav-btn.prev { left: 14px; } .nav-btn.next { right: 14px; }
+  .nav-bar { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 10; display: flex; align-items: center; gap: 10px;
+             padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); background: rgba(10,14,32,.6);
+             backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-size: 12px; color: #c3cbe6; opacity: .35; transition: opacity .2s; }
+  .nav-bar:hover { opacity: 1; }
+  .nav-bar button { border: 0; background: none; color: #eef2ff; font-size: 13px; cursor: pointer; padding: 2px 6px; }
+  .nav-bar .count { font-variant-numeric: tabular-nums; min-width: 44px; text-align: center; }
+  body.idle .nav-btn, body.idle .nav-bar { opacity: 0; }
+  body.idle { cursor: none; }
+
+  .slide {
+    --accent: #7dd3fc; --accent2: #a78bfa;
+    position: relative; width: 1600px; height: 900px; overflow: hidden;
+    border-radius: 28px; padding: 44px 52px 34px;
+    background: radial-gradient(1200px 700px at 110% -10%, #1e1b4b 0%, transparent 60%),
+                radial-gradient(900px 600px at -10% 110%, #0c4a6e 0%, transparent 60%),
+                linear-gradient(135deg, #070b1d 0%, #0b1030 55%, #0a0f24 100%);
+    display: grid; grid-template-rows: auto 1fr auto; gap: 22px;
+    page-break-after: always; break-after: page;
+  }
+  @media print { .slide { border-radius: 0; } }
+
+  .blob { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .55; z-index: 0; }
+  .blob.b1 { width: 520px; height: 520px; background: var(--accent);  top: -180px; right: 120px; opacity: .28; }
+  .blob.b2 { width: 460px; height: 460px; background: var(--accent2); bottom: -200px; left: 280px; opacity: .30; }
+  .blob.b3 { width: 300px; height: 300px; background: #f472b6; top: 380px; right: -120px; opacity: .16; }
+  .slide > *:not(.blob) { position: relative; z-index: 1; }
+
+  .glass {
+    background: linear-gradient(145deg, rgba(255,255,255,.10), rgba(255,255,255,.035));
+    border: 1px solid rgba(255,255,255,.16);
+    border-radius: 22px;
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    box-shadow: 0 10px 40px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18);
+  }
+
+  /* Platform slide */
+  .pf-body { display: grid; grid-template-columns: 300px 1fr 360px; gap: 16px; min-height: 0; }
+  .pf-left { display: flex; flex-direction: column; gap: 12px; }
+  .pf-card { padding: 16px 18px; border-radius: 18px; }
+  .pf-card.web { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+  .pf-top { display: flex; justify-content: space-between; align-items: baseline; }
+  .pf-name { font-size: 15px; font-weight: 700; }
+  .pf-val { font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
+  .pf-card.web .pf-val { color: var(--accent); }
+  .pf-val span { font-size: 13px; color: #9aa6cc; font-weight: 500; }
+  .pf-sub { font-size: 11.5px; color: #9aa6cc; margin-top: 4px; }
+  .pf-stack { display: flex; height: 10px; margin-top: 12px; border-radius: 5px; overflow: hidden; background: rgba(255,255,255,.06); }
+  .pf-stack i { display: block; height: 100%; }
+  .pf-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 11px; color: #9aa6cc; padding: 2px 4px; }
+  .pf-legend i, .pf-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .pf-t td { padding: 11px 0 11px 6px; font-size: 13px; }
+  .pf-t td:first-child { font-weight: 600; }
+  .pf-x { font-size: 11.5px; color: #fbbf24; font-weight: 700; }
+  .pf-bars { width: 120px; }
+  .pf-bars div { height: 6px; margin: 2px 0; }
+  .pf-bars i { display: block; height: 100%; border-radius: 3px; min-width: 2px; }
+  .pf-bars i.a { background: rgba(255,255,255,.35); }
+  .pf-bridge { display: flex; align-items: flex-end; gap: 14px; margin-top: 10px; flex: 1; }
+  .pf-bcol { width: 96px; display: flex; flex-direction: column; align-items: center; font-variant-numeric: tabular-nums; }
+  .pf-bcol b { font-size: 14px; margin-bottom: 4px; }
+  .pf-bwrap { height: 160px; width: 64px; display: flex; flex-direction: column; justify-content: flex-end; }
+  .pf-bwrap i { display: block; border-radius: 6px; }
+  .pf-bcol.base i { background: rgba(255,255,255,.35); }
+  .pf-bcol.up i { background: #4ade80; } .pf-bcol.up b { color: #4ade80; }
+  .pf-bcol.mix i { background: #a78bfa; } .pf-bcol.mix b { color: #a78bfa; }
+  .pf-bcol.end i { background: var(--accent); } .pf-bcol.end b { color: var(--accent); }
+  .pf-bcol span { font-size: 11px; color: #9aa6cc; margin-top: 6px; text-align: center; }
+  .pf-bnote { flex: 1; align-self: center; font-size: 13px; line-height: 1.5; color: #c9d1ee; padding-left: 10px; }
+  .pf .insights li { margin-bottom: 8px; }
+  .pf-opp { margin-top: auto; }
+  .pf-opp .kpi-value { font-size: 28px; }
+
+  /* Title slide */
+  .slide.title-slide { grid-template-rows: 1fr; grid-template-columns: 1fr 800px; align-items: center; gap: 20px; padding: 44px 40px 44px 80px; }
+  .t-left { align-self: center; }
+  .t-h1 { margin: 6px 0 0; font-size: 58px; font-weight: 800; letter-spacing: -.03em; line-height: 1.04; }
+  .t-h1 span { background: linear-gradient(90deg, #7dd3fc, #c084fc 60%, #f472b6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .t-sub { margin-top: 24px; font-size: 19px; line-height: 1.5; color: #b6bfdc; max-width: 600px; }
+  .t-stats { display: flex; gap: 14px; margin-top: 40px; }
+  .t-stat { padding: 16px 20px; border-radius: 18px; }
+  .t-stat b { display: block; font-size: 26px; font-weight: 800; letter-spacing: -.01em; }
+  .t-stat span { font-size: 12px; color: #9aa6cc; text-transform: uppercase; letter-spacing: .08em; }
+  .t-art { width: 800px; height: 760px; overflow: visible; }
+  .t-art text { fill: #dbe3ff; font-size: 15px; font-weight: 600; }
+  .t-art .t-plus { fill: var(--c); font-size: 12px; font-weight: 800; opacity: .8; }
+  .t-node { animation: tFloat 4s ease-in-out infinite; transform-box: fill-box; }
+  .t-dash { animation: tDash 2.4s linear infinite; }
+  .t-spin { transform-origin: 380px 400px; animation: tSpin 40s linear infinite; }
+  .t-twinkle { animation: tTw 3s ease-in-out infinite; }
+  @keyframes tFloat { 50% { translate: 0 -8px; } }
+  @keyframes tDash { to { stroke-dashoffset: -36; } }
+  @keyframes tSpin { to { transform: rotate(360deg); } }
+  @keyframes tTw { 50% { opacity: .1; } }
+
+  /* Header */
+  .header { display: flex; align-items: flex-end; justify-content: space-between; }
+  .eyebrow { font-size: 13px; letter-spacing: .22em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 8px; }
+  .title { font-size: 44px; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
+  .title span { color: var(--accent); text-shadow: 0 0 28px color-mix(in srgb, var(--accent2) 55%, transparent); }
+  .subtitle { margin-top: 10px; font-size: 16px; color: #b6bfdc; font-weight: 400; max-width: 900px; }
+  .chips { display: flex; gap: 10px; }
+  .chip { padding: 8px 14px; font-size: 13px; color: #dbe3ff; border-radius: 999px; font-weight: 500; white-space: nowrap; }
+  .bside-btn { cursor: pointer; font-family: inherit; border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); color: #fff; background: color-mix(in srgb, var(--accent) 22%, rgba(255,255,255,0.06)); display: inline-flex; align-items: center; gap: 6px; }
+  .bside-btn:hover { background: color-mix(in srgb, var(--accent) 38%, rgba(255,255,255,0.08)); }
+  .bside-modal { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; background: rgba(5,8,20,0.78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .bside-modal.open { display: flex; }
+  .bside-box { position: relative; padding: 18px 18px 14px; border-radius: 20px; background: rgba(20,26,48,0.85); border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 30px 80px rgba(0,0,0,0.5); display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 92vw; max-height: 92vh; }
+  .bside-box img { max-width: calc(92vw - 36px); max-height: calc(92vh - 70px); min-height: min(320px, calc(92vh - 70px)); object-fit: contain; border-radius: 10px; background: #fff; }
+  .bside-cap { font-size: 14px; color: #dbe3ff; font-weight: 600; }
+  .bside-close { position: absolute; top: -14px; right: -14px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.25); background: rgba(30,36,64,0.95); color: #fff; font-size: 18px; cursor: pointer; }
+
+  /* Body */
+  .body { display: grid; grid-template-columns: 330px 1fr; gap: 22px; min-height: 0; }
+
+  .hero { padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+  .hero-img { width: 100%; height: 210px; border-radius: 16px; overflow: hidden; position: relative;
+              border: 1px solid rgba(255,255,255,.14); }
+  .hero-img img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.12); }
+  .hero-desc { font-size: 13.5px; color: #c3cbe6; line-height: 1.45; }
+  .kpi { padding: 14px 16px; border-radius: 16px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); }
+  .kpi-label { font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: #9aa6cc; font-weight: 600; }
+  .kpi-value { font-size: 34px; font-weight: 800; margin-top: 4px; letter-spacing: -.02em; }
+  .kpi-value.accent { color: var(--accent); text-shadow: 0 0 20px color-mix(in srgb, var(--accent2) 50%, transparent); }
+  .kpi-sub { font-size: 12px; color: #9aa6cc; margin-top: 2px; }
+  .kpi-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kpi-row .kpi-value { font-size: 22px; }
+
+  .right { display: grid; grid-template-rows: 300px 1fr; gap: 22px; min-height: 0; }
+  .seg-row { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 18px; }
+  .bottom-row { display: grid; grid-template-columns: 1.55fr 1fr; gap: 18px; min-height: 0; }
+
+  .panel { padding: 16px 18px; display: flex; flex-direction: column; min-height: 0; }
+  .panel-title { font-size: 14px; font-weight: 700; letter-spacing: .01em; }
+  .panel-head { display: grid; grid-template-columns: var(--cols); gap: 8px; font-size: 10.5px; color: #8e9ac0;
+                text-transform: uppercase; letter-spacing: .1em; font-weight: 600; margin: 10px 0 6px; }
+  .panel-head .r { text-align: right; }
+  .rows { display: flex; flex-direction: column; gap: 7px; flex: 1; justify-content: space-evenly; }
+  .row { display: grid; grid-template-columns: var(--cols); gap: 8px; align-items: center; font-size: 13px; }
+  .row .lbl { color: #dfe5fb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .lbl small { color: #8e9ac0; font-size: 10.5px; margin-left: 4px; }
+  .bar { height: 12px; border-radius: 999px; background: rgba(255,255,255,.07); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 999px;
+           background: linear-gradient(90deg, var(--accent), var(--accent2));
+           box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent); }
+  .row .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .row .mpi { text-align: right; font-variant-numeric: tabular-nums; color: #b9c3e3; }
+  .origin .panel-head .grp { color: #dfe5fb; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,.12); }
+  .origin .panel-head .grp em { font-style: normal; color: #8e9ac0; text-transform: none; letter-spacing: 0; font-weight: 500; }
+  .origin .row .mpi { font-size: 12px; }
+  .origin .row .num.hi { color: var(--accent); }
+  .origin .row .bar.second, .origin .panel-head .grp + .grp { margin-left: 16px; }
+  .compact .rows { justify-content: flex-start; gap: 9px; }
+  .xgrid { display: grid; grid-template-columns: 74px 1fr 1fr 1fr; grid-auto-rows: 1fr; gap: 6px; flex: 1; margin-top: 10px; min-height: 0; }
+  .xgrid .xh { font-size: 10.5px; color: #8e9ac0; text-transform: uppercase; letter-spacing: .1em; font-weight: 600;
+               display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; }
+  .xgrid .xl { font-size: 13px; color: #dfe5fb; display: flex; align-items: center; }
+  .xgrid .xc { border-radius: 12px; border: 1px solid rgba(255,255,255,.12); display: flex; flex-direction: column;
+               align-items: center; justify-content: center; gap: 2px; }
+  .xgrid .xc b { font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .xgrid .xc span { font-size: 11.5px; color: #c3cbe6; font-variant-numeric: tabular-nums; }
+  .xgrid .xc.tot { background: rgba(255,255,255,.03); border-style: dashed; }
+  .xgrid .xc.tot b { font-size: 15px; color: #c3cbe6; }
+  .xgrid .xc.hi { border-color: var(--accent); box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .xgrid .xc.hi b { color: #fff; }
+  .xgrid.mini { grid-template-columns: 54px 1fr 1fr 1fr; gap: 5px; margin-top: 6px; }
+  .xgrid.mini .xh { font-size: 9px; letter-spacing: .06em; }
+  .xgrid.mini .xl { font-size: 11.5px; }
+  .xgrid.mini .xc { border-radius: 10px; padding: 4px 0; }
+  .xgrid.mini .xc b { font-size: 15px; }
+  .xgrid.mini .xc.tot b { font-size: 13px; }
+  .xgrid.mini .xc span { font-size: 10.5px; }
+  .cross .note-sm { margin-top: 8px; }
+  .overview .collage span { display: none; }
+  .overview .cross { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .seg-row .cross { grid-column: span 2; }
+  .compact .row { row-gap: 4px; }
+  .compact .row .bar { grid-column: 1 / -1; height: 7px; }
+  .row.top .lbl { color: #fff; font-weight: 600; }
+  .row.top .num { color: var(--accent); }
+
+  .insights { padding: 18px 20px; }
+  .insights ul { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  .insights li { font-size: 13px; line-height: 1.45; color: #d6ddf5; padding-left: 22px; position: relative; }
+  .insights li::before { content: ''; position: absolute; left: 0; top: 6px; width: 10px; height: 10px; border-radius: 3px;
+                         background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+  .insights li b { color: #fff; }
+
+  /* Overview slide */
+  .overview .hero { gap: 12px; }
+  .collage { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .collage div { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,.14); aspect-ratio: 1 / 1; }
+  .collage img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.15); }
+  .collage span { position: absolute; left: 0; right: 0; bottom: 0; font-size: 9.5px; font-weight: 600; text-align: center;
+                  padding: 10px 2px 4px; background: linear-gradient(transparent, rgba(5,7,15,.85)); color: #e6ebff; }
+  .overview .kpi { padding: 10px 14px; }
+  .overview .kpi-row .kpi-value { font-size: 20px; }
+  .overview .kpi-row .kpi-sub { font-size: 11px; }
+  .overview .right { grid-template-rows: 268px 1fr; gap: 18px; }
+  .ov-row1 { display: grid; grid-template-columns: 2.25fr 1fr; gap: 18px; min-height: 0; }
+  .ov-row2 { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1.25fr; gap: 18px; min-height: 0; }
+  .chart { flex: 1; min-height: 0; margin-top: 8px; }
+  .chart-pair { display: grid; grid-template-columns: 340fr 400fr; gap: 14px; height: 100%; }
+  .chart-pair > div { display: flex; flex-direction: column; min-height: 0; }
+  .chart-pair svg { flex: 1; min-height: 0; }
+  .chart-sub { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #8e9ac0; font-weight: 600; }
+  .stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .stat-row div { padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); }
+  .stat-row b { display: block; font-size: 20px; font-weight: 800; color: var(--accent); }
+  .stat-row span { font-size: 11px; color: #9aa6cc; line-height: 1.3; display: block; margin-top: 2px; }
+  .chart .ax { font-size: 10px; fill: #8e9ac0; }
+  .chart .lab { font-size: 10.5px; font-weight: 600; }
+  .chart .ann { font-size: 11px; font-weight: 700; fill: #fff; }
+  .note-sm { font-size: 11.5px; color: #9aa6cc; line-height: 1.4; margin-top: 8px; }
+  .rows .sep { height: 1px; background: rgba(255,255,255,.12); margin: 2px 0; }
+  .overview .compact .rows { gap: 6px; }
+  .overview .insights li { font-size: 12px; }
+
+  .footer { display: flex; justify-content: space-between; font-size: 11.5px; color: #7f8bb3; }
+  .footer .note { max-width: 1200px; }
+</style>
+</head>
+<body>
+<div id="deck"></div>
+
+<script>
+// Source: bi_dw.fact_booking_flights, Agoda whitelabel (whitelabel_id = 1), non-cancelled bookings,
+// booking_date 2026-07-29 .. 2026-10-26 (last 90 days), aggregated to itinerary_id.
+// Per ancillary: ar = attach rate %, mpi = margin per itinerary (all itineraries), mpa = margin per attached itinerary.
+const COLS = ['itis','bag_ar','bag_mpi','bag_mpa','seat_ar','seat_mpi','seat_mpa','tp_ar','tp_mpi','tp_mpa','ceg_ar','ceg_mpi','ceg_mpa','lp_ar','lp_mpi','lp_mpa','cf_ar','cf_mpi','cf_mpa'];
+const RAW = {
+  all: [['All',2611522,6.069,0.85,14.0,2.624,0.15,5.7,2.267,0.159,7.0,1.72,0.177,10.31,0.801,0.024,2.98,0.024,0.002,9.23]],
+  route: [
+    ['Domestic',1645912,4.16,0.51,12.25,2.482,0.114,4.58,1.951,0.083,4.27,1.066,0.102,9.53,0.324,0.005,1.47,0.023,0.001,4.74],
+    ['International',965610,9.321,1.429,15.33,2.865,0.211,7.36,2.805,0.287,10.24,2.834,0.306,10.81,1.614,0.056,3.5,0.025,0.004,16.06],
+  ],
+  first: [
+    ['First flight booking',737405,7.373,1.085,14.72,3.657,0.234,6.4,3.288,0.251,7.63,2.621,0.274,10.47,1.416,0.044,3.1,0.031,0.003,9.94],
+    ['Repeat booker',1874117,5.555,0.757,13.63,2.217,0.116,5.25,1.865,0.122,6.56,1.365,0.139,10.19,0.559,0.016,2.86,0.021,0.002,8.81],
+  ],
+  adults: [
+    ['1',1919545,4.539,0.523,11.52,2.132,0.075,3.52,2.24,0.12,5.34,1.356,0.136,10.03,0.795,0.017,2.11,0.025,0.002,7.8],
+    ['2',515655,9.601,1.464,15.25,4.055,0.304,7.5,2.289,0.212,9.27,2.437,0.254,10.42,0.867,0.039,4.46,0.022,0.003,13.61],
+    ['3',101857,11.327,2.062,18.21,3.916,0.443,11.3,2.396,0.342,14.28,3.236,0.356,11.02,0.644,0.046,7.08,0.012,0.001,12.06],
+    ['4',48041,13.863,3.054,22.03,3.799,0.568,14.95,2.75,0.536,19.5,4.08,0.466,11.41,0.799,0.074,9.21,0.006,0.002,30.61],
+    ['5+',26424,13.806,3.906,28.29,3.285,0.664,20.23,2.471,0.57,23.06,4.015,0.471,11.72,0.556,0.074,13.27,0.008,0.005,60.74],
+  ],
+  children: [
+    ['0',2514108,5.834,0.799,13.69,2.535,0.132,5.22,2.262,0.151,6.67,1.653,0.17,10.26,0.807,0.023,2.83,0.024,0.002,8.91],
+    ['1',74201,11.298,1.94,17.17,4.854,0.519,10.69,2.424,0.333,13.72,3.257,0.354,10.88,0.64,0.046,7.18,0.016,0.004,24.64],
+    ['2',20658,14.372,2.758,19.19,5.063,0.791,15.62,2.309,0.422,18.27,4.027,0.451,11.21,0.673,0.064,9.48,0.01,0.001,13.08],
+    ['3+',2555,17.613,3.84,21.81,5.91,1.241,21.01,2.466,0.591,23.95,4.305,0.514,11.93,0.47,0.059,12.5,0.0,0.0,null],
+  ],
+  origin: [
+    ['Thailand',682130,5.159,0.696,13.48,3.832,0.176,4.61,2.212,0.165,7.44,1.142,0.113,9.9,0.456,0.012,2.54,0.005,0.001,11.21],
+    ['Indonesia',391001,1.906,0.276,14.5,1.012,0.044,4.38,2.182,0.098,4.5,1.17,0.11,9.39,0.083,0.003,3.02,0.063,0.004,6.47],
+    ['Malaysia',339994,6.561,0.841,12.83,2.812,0.175,6.22,2.381,0.152,6.38,1.246,0.125,10.05,0.143,0.005,3.26,0.001,0.0,13.32],
+    ['South Korea',230789,3.849,0.624,16.21,2.621,0.221,8.42,2.921,0.343,11.73,3.959,0.422,10.65,1.806,0.063,3.48,0.072,0.008,11.29],
+    ['Philippines',190320,11.354,1.368,12.05,0.949,0.066,7.0,2.662,0.19,7.13,1.272,0.137,10.79,0.603,0.014,2.31,0.011,0.002,18.13],
+    ['Japan',172140,9.134,1.464,16.03,3.813,0.251,6.6,1.721,0.159,9.25,3.871,0.415,10.73,1.596,0.044,2.73,0.024,0.002,9.81],
+    ['Singapore',151635,7.508,1.317,17.54,2.116,0.149,7.06,2.294,0.237,10.32,2.602,0.28,10.77,0.835,0.029,3.41,0.012,0.001,4.93],
+    ['Vietnam',121681,5.168,0.549,10.62,1.62,0.084,5.17,5.227,0.086,1.65,1.663,0.155,9.35,0.687,0.016,2.36,0.038,0.004,9.49],
+    ['Taiwan',119134,14.554,2.157,14.82,2.368,0.167,7.04,0.306,0.017,5.64,0.0,0.0,null,3.334,0.113,3.39,0.008,0.001,10.61],
+    ['India',92470,2.354,0.266,11.3,3.218,0.112,3.48,0.518,0.016,3.09,1.607,0.161,10.04,0.159,0.003,2.05,0.004,0.0,5.63],
+  ],
+};
+
+// Attached itinerary counts per origin country split by route type: [itineraries, bag, seat, tp, ceg, lp, cf]
+const ROUTE_KEYS = ['bag','seat','tp','ceg','lp','cf'];
+const ORIGIN_ROUTE = {
+  'Thailand':    { dom: [566801,22353,22063,9717,4539,1370,11], intl: [115329,12840,4074,5372,3253,1739,24] },
+  'Indonesia':   { dom: [304697,2070,2402,6621,3068,104,223],   intl: [86304,5381,1553,1910,1506,222,24] },
+  'Malaysia':    { dom: [239207,10210,5934,6108,1902,112,0],    intl: [100787,12097,3626,1986,2333,374,2] },
+  'South Korea': { dom: [46608,1472,1191,60,1336,605,53],       intl: [184181,7410,4858,6682,7802,3563,113] },
+  'Philippines': { dom: [148693,14926,1024,3296,1136,544,12],   intl: [41627,6682,782,1771,1284,604,9] },
+  'Japan':       { dom: [85589,6808,2579,249,2568,775,15],      intl: [86551,8916,3984,2714,4095,1973,26] },
+  'Singapore':   { dom: [23479,1602,510,565,322,131,9],         intl: [128156,9783,2699,2913,3623,1135,9] },
+  'Vietnam':     { dom: [78558,2341,1015,4219,930,365,27],      intl: [43123,3947,956,2141,1094,471,19] },
+  'Taiwan':      { dom: [10727,1000,137,116,0,259,2],           intl: [108407,16339,2684,248,0,3713,8] },
+  'India':       { dom: [84718,1779,2559,420,1146,117,4],       intl: [7752,398,417,59,340,30,0] },
+};
+
+// Last 90 days, itinerary level, by route type x first flight booking:
+// [route, first (1/0), itineraries, bag_ar, bag_mpi, seat_ar, seat_mpi, tp_ar, tp_mpi, ceg_ar, ceg_mpi, lp_ar, lp_mpi, cf_ar, cf_mpi, any_ar, all_mpi]
+const CROSS_KEYS = ['bag', 'seat', 'tp', 'ceg', 'lp', 'cf', 'any'];
+const CROSS = [
+  ['Domestic', 1, 428091, 4.945, 0.622, 3.594, 0.18, 2.796, 0.114, 1.777, 0.172, 0.598, 0.009, 0.0308, 0.0015, 12.07, 1.099],
+  ['Domestic', 0, 1217846, 3.885, 0.47, 2.091, 0.09, 1.655, 0.072, 0.816, 0.077, 0.228, 0.003, 0.0197, 0.0009, 7.825, 0.714],
+  ['International', 1, 309306, 10.734, 1.727, 3.744, 0.309, 3.97, 0.44, 3.788, 0.415, 2.549, 0.092, 0.0314, 0.0053, 20.482, 2.988],
+  ['International', 0, 656376, 8.655, 1.289, 2.451, 0.165, 2.256, 0.215, 2.385, 0.255, 1.173, 0.04, 0.0224, 0.0035, 14.584, 1.967],
+];
+
+function crossPanel(key, mini) {
+  const k = 3 + CROSS_KEYS.indexOf(key) * 2;
+  const agg = rows => {
+    const n = rows.reduce((a, r) => a + r[2], 0);
+    return { ar: rows.reduce((a, r) => a + r[k] * r[2], 0) / n, mpi: rows.reduce((a, r) => a + r[k + 1] * r[2], 0) / n };
+  };
+  const pick = (rt, fb) => agg(CROSS.filter(r => (rt == null || r[0] === rt) && (fb == null || r[1] === fb)));
+  const routes = ['Domestic', 'International', null], firsts = [1, 0, null];
+  const inner = CROSS.map(r => r[k]);
+  const max = Math.max(...inner) || 1, top = max;
+  const cell = (rt, fb) => {
+    const c = pick(rt, fb), tot = rt == null || fb == null;
+    const bg = tot ? '' : `background: color-mix(in srgb, var(--accent) ${Math.round(6 + 34 * c.ar / max)}%, rgba(255,255,255,.03))`;
+    return `<div class="xc ${tot ? 'tot' : ''} ${!tot && c.ar === top && top > 0 ? 'hi' : ''}" style="${bg}"><b>${fmtPct(c.ar)}</b><span>${fmtUsd(c.mpi)}/iti</span></div>`;
+  };
+  const lift = pick('International', 1).ar / pick('Domestic', 0).ar;
+  const fLift = pick(null, 1).ar / pick(null, 0).ar, iLift = pick('International', null).ar / pick('Domestic', null).ar;
+  return `
+    <div class="${mini ? 'kpi' : 'glass panel'} cross">
+      ${mini ? '<div class="kpi-label">Any attach: first/repeat × route</div>' : '<div class="panel-title">First / repeat booker × route type</div>'}
+      <div class="xgrid ${mini ? 'mini' : ''}">
+        <div></div><div class="xh">Domestic</div><div class="xh">${mini ? 'Intl' : 'International'}</div><div class="xh">All</div>
+        ${firsts.map(fb => `<div class="xl">${fb === 1 ? 'First' : fb === 0 ? 'Repeat' : 'All'}</div>${routes.map(rt => cell(rt, fb)).join('')}`).join('')}
+      </div>
+      ${mini ? '' : `<div class="note-sm">First-time international bookers attach <b>${lift.toFixed(1)}x</b> as often as repeat domestic. Route lift ${iLift.toFixed(1)}x, first-booking lift ${fLift.toFixed(1)}x.</div>`}
+    </div>`;
+}
+
+const ANCILLARIES = [
+  {
+    key: 'bag', name: 'Paid Bags', img: 'img/paid_bags.jpg', accent: '#38bdf8', accent2: '#818cf8',
+    desc: 'Extra checked or cabin baggage purchased during the booking flow on top of the fare allowance.',
+    marginLabel: 'Margin / itinerary',
+    insights: [
+      '<b>Largest ancillary by margin:</b> $0.85 per itinerary, more than 5x any other add-on.',
+      '<b>Party size drives bags:</b> attach grows from 4.5% (solo) to 13.9% (4 adults) and 17.6% with 3+ children.',
+      '<b>International is 2.2x domestic</b> (9.3% vs 4.2%). Taiwan (14.6%) and Philippines (11.4%) lead; Indonesia lags at 1.9%.',
+      '<b>Route split:</b> Taiwan\'s bag sales are 94% international, while the Philippines is the one big market where domestic leads (69% of bag sales, 10% domestic attach). Indonesia domestic attaches only 0.7%.',
+    ],
+  },
+  {
+    key: 'seat', name: 'Paid Seats', img: 'img/paid_seats.jpg', accent: '#22d3ee', accent2: '#a78bfa',
+    desc: 'Paid seat selection (standard, extra legroom or preferred seats) chosen in the booking flow.',
+    marginLabel: 'Margin / itinerary',
+    insights: [
+      '<b>Families want to sit together:</b> attach roughly doubles with children (2.5% with no kids, 4.9–5.9% with kids).',
+      '<b>Route matters less than for bags:</b> International 2.9% vs domestic 2.5%. Low margin per seat ($5.70 per attached itinerary).',
+      '<b>Market spread is wide:</b> Thailand and Japan ~3.8%, Philippines and Indonesia ~1.0%.',
+      '<b>Route split:</b> in Thailand seats sell as well on domestic as on international trips (3.9% vs 3.5%), so 84% of Thai seat sales are domestic. Elsewhere international attach is higher.',
+    ],
+  },
+  {
+    key: 'tp', name: 'Trip Protection', img: 'img/trip_protection.jpg', accent: '#34d399', accent2: '#60a5fa',
+    desc: 'Travel insurance covering trip cancellation, delays and medical events, sold alongside the flight.',
+    marginLabel: 'Margin / itinerary',
+    insights: [
+      '<b>First-time bookers buy more cover:</b> 3.3% vs 1.9% for repeat bookers.',
+      '<b>Vietnam has the highest attach (5.2%) but the lowest margin</b>, only $1.65 per attached itinerary vs $7.00 overall.',
+      '<b>Near-zero in Taiwan (0.3%) and India (0.5%)</b>, likely limited availability. South Korea gives the best margin per itinerary ($0.34).',
+      '<b>Route split:</b> South Korea and Japan sell almost no domestic cover (0.1% and 0.3%) vs 3.6% and 3.1% on international trips. Vietnam attaches ~5% on both.',
+    ],
+  },
+  {
+    key: 'ceg', name: 'CEG Premium', img: 'img/ceg_premium.jpg', accent: '#fbbf24', accent2: '#c084fc',
+    desc: 'Paid customer-support upgrade with priority access to Agoda support agents. Includes both the Plus and Premium tiers.',
+    marginLabel: 'Revenue / itinerary*',
+    insights: [
+      '<b>Bigger trips buy priority support:</b> attach rises from 1.4% for solo travellers to 4.1% for 4 adults and 4.3% with 3+ children.',
+      '<b>International is 2.7x domestic</b> (2.8% vs 1.1%), and first-time bookers attach almost twice as often as repeat bookers (2.6% vs 1.4%).',
+      '<b>North Asia leads:</b> South Korea (4.0%) and Japan (3.9%), mostly on international trips. Not sold in Taiwan in this period.',
+      '<b>Route split:</b> international attach beats domestic in every market, by 3–4x in Thailand (2.8% vs 0.8%), the Philippines (3.1% vs 0.8%) and India (4.4% vs 1.4%).',
+    ],
+  },
+  {
+    key: 'lp', name: 'Luggage Protection', img: 'img/luggage_protection.jpg', accent: '#f472b6', accent2: '#818cf8',
+    desc: 'Lost or delayed baggage protection that compensates travellers if their checked bag is delayed or lost.',
+    marginLabel: 'Margin / itinerary',
+    insights: [
+      '<b>International product:</b> 1.6% attach vs 0.3% domestic, and 2.4x the margin per attached itinerary.',
+      '<b>Unlike bags, it does not grow with party size.</b> Attach is flat or falling for larger groups and families.',
+      '<b>Taiwan (3.3%), South Korea (1.8%) and Japan (1.6%) lead.</b> First-time bookers attach 2.5x more than repeat bookers.',
+      '<b>Route split:</b> Taiwan sells it even on domestic trips (2.4%), while Indonesia and Malaysia barely sell it domestically (under 0.05%).',
+    ],
+  },
+  {
+    key: 'cf', name: 'CFAR', img: 'img/cfar.jpg', accent: '#fb923c', accent2: '#e879f9',
+    desc: 'Cancel For Any Reason: lets travellers cancel their flight for any reason and receive a partial refund.',
+    marginLabel: 'Margin / itinerary',
+    insights: [
+      '<b>Still niche:</b> 0.024% attach (~630 itineraries in 90 days), so treat segment cuts as directional.',
+      '<b>International CFAR earns 3.4x more per sale</b> ($16.06 vs $4.74 per attached itinerary).',
+      '<b>South Korea (0.07%) and Indonesia (0.06%) lead</b>, while Thailand and Malaysia barely attach.',
+      '<b>Route split:</b> Indonesia\'s CFAR is 90% domestic, and South Korea attaches more on domestic (0.11%) than international trips (0.06%). Volumes are small, so read directionally.',
+    ],
+  },
+];
+
+const SEGMENTS = [
+  { id: 'route',    title: 'Route type',        labelFmt: l => l },
+  { id: 'first',    title: 'First flight booking', labelFmt: l => l.split(' ')[0] },
+  { id: 'adults',   title: 'Number of adults',  labelFmt: l => l + (l === '1' ? ' adult' : ' adults') },
+  { id: 'children', title: 'Number of children', labelFmt: l => l + (l === '1' ? ' child' : ' children') },
+];
+
+const fmtPct = v => v == null ? '–' : (v >= 1 ? v.toFixed(1) : v >= 0.1 ? v.toFixed(2) : v.toFixed(3)) + '%';
+const fmtUsd = v => v == null ? '–' : '$' + (v >= 0.1 ? v.toFixed(2) : v.toFixed(3));
+const fmtNum = v => v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e3 ? Math.round(v / 1e3) + 'K' : String(Math.round(v));
+
+function rowsFor(segId, key) {
+  const i = COLS.indexOf(key + '_ar');
+  return RAW[segId].map(r => ({ label: r[0], itis: r[1], ar: r[i + 1], mpi: r[i + 2], mpa: r[i + 3] }));
+}
+
+function panel(title, rows, labelFmt, cols, showVol, compact) {
+  const max = Math.max(...rows.map(r => r.ar)) || 1;
+  const topAr = Math.max(...rows.map(r => r.ar));
+  const bar = r => `<span class="bar"><i style="width:${Math.max(2, r.ar / max * 100)}%"></i></span>`;
+  return `
+    <div class="glass panel ${compact ? 'compact' : ''}" style="--cols:${cols}">
+      <div class="panel-title">${title}</div>
+      <div class="panel-head"><span>Segment</span>${compact ? '' : '<span>Attach rate</span>'}<span class="r">Attach</span><span class="r">$/iti</span></div>
+      <div class="rows">
+        ${rows.map(r => `
+          <div class="row ${r.ar === topAr && r.ar > 0 ? 'top' : ''}">
+            <span class="lbl">${labelFmt(r.label)}${showVol ? `<small>${fmtNum(r.itis)}</small>` : ''}</span>
+            ${compact ? '' : bar(r)}
+            <span class="num">${fmtPct(r.ar)}</span>
+            <span class="mpi">${fmtUsd(r.mpi)}</span>
+            ${compact ? bar(r) : ''}
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+// Margin per itinerary per origin country and route type: [bag, seat, tp, ceg, lp, cf]
+const ORIGIN_ROUTE_MPI = {
+  'Thailand':    { dom: [0.5248,0.1603,0.1279,0.0743,0.003,0.0001],  intl: [1.5344,0.2559,0.3449,0.3033,0.0537,0.003] },
+  'Indonesia':   { dom: [0.0985,0.0291,0.0646,0.0888,0.0006,0.0035], intl: [0.9036,0.0979,0.2161,0.1841,0.0093,0.0062] },
+  'Malaysia':    { dom: [0.4836,0.13,0.0863,0.0767,0.0006,0.0],      intl: [1.691,0.2817,0.3076,0.2404,0.0142,0.0003] },
+  'South Korea': { dom: [0.474,0.1323,0.0057,0.2892,0.0237,0.0042],  intl: [0.6621,0.2431,0.4277,0.4554,0.0728,0.0091] },
+  'Philippines': { dom: [1.0287,0.0417,0.0727,0.0744,0.0044,0.0008], intl: [2.5816,0.1549,0.6082,0.3615,0.0478,0.0063] },
+  'Japan':       { dom: [1.0429,0.2267,0.0146,0.3037,0.0136,0.0009], intl: [1.8809,0.276,0.3022,0.5254,0.0733,0.0037] },
+  'Singapore':   { dom: [0.944,0.118,0.0858,0.1482,0.0092,0.0016],   intl: [1.3848,0.1553,0.2644,0.3046,0.032,0.0004] },
+  'Vietnam':     { dom: [0.2652,0.0531,0.0634,0.1026,0.0061,0.0012], intl: [1.0656,0.1396,0.1282,0.2517,0.0346,0.008] },
+  'Taiwan':      { dom: [1.0925,0.0676,0.0367,0.0,0.0356,0.0013],    intl: [2.2625,0.1765,0.0153,0.0,0.1209,0.0008] },
+  'India':       { dom: [0.2326,0.096,0.0124,0.132,0.0025,0.0003],   intl: [0.6321,0.2868,0.0553,0.4821,0.0113,0.0] },
+};
+
+function originPanel(key) {
+  const k = ROUTE_KEYS.indexOf(key) + 1;
+  const rows = rowsFor('origin', key).map(r => {
+    const s = ORIGIN_ROUTE[r.label], m = ORIGIN_ROUTE_MPI[r.label];
+    return { label: r.label, dom: s.dom[k] / s.dom[0] * 100, intl: s.intl[k] / s.intl[0] * 100, domMpi: m.dom[k - 1], intlMpi: m.intl[k - 1] };
+  });
+  const max = Math.max(...rows.flatMap(r => [r.dom, r.intl])) || 1;
+  const topDom = Math.max(...rows.map(r => r.dom)), topIntl = Math.max(...rows.map(r => r.intl));
+  const cell = (v, mpi, top, cls = '') => `
+    <span class="bar ${cls}"><i style="width:${Math.max(1.5, v / max * 100)}%"></i></span>
+    <span class="num ${v === top && v > 0 ? 'hi' : ''}">${fmtPct(v)}</span>
+    <span class="mpi">${fmtUsd(mpi)}</span>`;
+  return `
+    <div class="glass panel origin" style="--cols:92px 1fr 54px 48px 1fr 54px 48px">
+      <div class="panel-title">Top 10 origin countries: by route type</div>
+      <div class="panel-head">
+        <span>Country</span>
+        <span class="grp" style="grid-column: span 3">Domestic <em>· attach · $/iti</em></span>
+        <span class="grp" style="grid-column: span 3">International <em>· attach · $/iti</em></span>
+      </div>
+      <div class="rows">
+        ${rows.map(r => `
+          <div class="row">
+            <span class="lbl">${r.label}</span>
+            ${cell(r.dom, r.domMpi, topDom)}
+            ${cell(r.intl, r.intlMpi, topIntl, 'second')}
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function slide(a, idx) {
+  const all = rowsFor('all', a.key)[0];
+  const attached = all.ar / 100 * all.itis;
+  const smallCols = '1fr 58px 54px';
+  return `
+  <section class="slide" style="--accent:${a.accent};--accent2:${a.accent2}">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+    <div class="header">
+      <div>
+        <div class="eyebrow">Ancillary deep dive · ${idx + 1} / ${ANCILLARIES.length}</div>
+        <div class="title"><span>${a.name}</span></div>
+        <div class="subtitle">Who attaches it and what it earns: attach rate and ${a.marginLabel.replace('*','').toLowerCase()} by customer segment</div>
+      </div>
+      <div class="chips">
+        <div class="glass chip">Last 90 days · 29 Jul – 26 Oct 2026</div>
+        <div class="glass chip">${fmtNum(all.itis)} itineraries</div>
+      </div>
+    </div>
+
+    <div class="body">
+      <div class="glass hero">
+        <div class="hero-img"><img src="${a.img}" alt="${a.name}"></div>
+        <div class="hero-desc">${a.desc}</div>
+        <div class="kpi">
+          <div class="kpi-label">Attach rate</div>
+          <div class="kpi-value accent">${fmtPct(all.ar)}</div>
+          <div class="kpi-sub">≈ ${fmtNum(attached)} itineraries with ${a.name}</div>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi">
+            <div class="kpi-label">${a.marginLabel.replace(' / itinerary', '')} / iti</div>
+            <div class="kpi-value">${fmtUsd(all.mpi)}</div>
+            <div class="kpi-sub">across all itineraries</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Per attached</div>
+            <div class="kpi-value">${fmtUsd(all.mpa)}</div>
+            <div class="kpi-sub">per itinerary with it</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right">
+        <div class="seg-row">
+          ${crossPanel(a.key)}
+          ${SEGMENTS.filter(s => s.id === 'adults' || s.id === 'children').map(s => panel(s.title, rowsFor(s.id, a.key), s.labelFmt, smallCols, false, true)).join('')}
+        </div>
+        <div class="bottom-row">
+          ${originPanel(a.key)}
+          <div class="glass insights">
+            <div class="panel-title">Key takeaways</div>
+            <ul>${a.insights.map(t => `<li>${t}</li>`).join('')}</ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="note">
+        Attach rate = % of distinct itineraries with ${a.name}. Cross panel: cells shaded by attach rate; dashed cells are row/column totals. $/iti = ${a.marginLabel.replace('*','').toLowerCase()} across all itineraries in the segment (booking-time values, USD).
+        Origin panel: attach rate and $/iti within each country's domestic and international itineraries (bars share one scale).
+        Source: bi_dw.fact_booking_flights · Agoda whitelabel · non-cancelled bookings.
+        ${a.key === 'ceg' ? '<br>Includes Plus and Premium tiers. * No CEG margin column exists; selling amount is shown as revenue (service cost sits in CEG opex).' : ''}
+        ${a.key === 'cf' ? '<br>Low volume: segment cuts are based on a few hundred itineraries.' : ''}
+      </div>
+      <div>Flights Ancillaries · Product Learnings</div>
+    </div>
+  </section>`;
+}
+
+// ---------- Overview slide (all ancillaries) ----------
+// 90-day itinerary distribution by number of ancillaries attached: [label, itineraries, ancillary margin per itinerary]
+const OV_COUNT = [['0', 2305582, 0], ['1', 265723, 10.033], ['2', 34785, 20.313], ['3+', 5529, 33.115]];
+// Monthly (booking month) margin per itinerary, last 12 months: [month, bag, seat, tp, ceg, lp, cf]
+const OV_MARGIN = [
+  ['Nov 25', 1.219, 0.135, 0.181, 0.246, 0.014, 0], ['Dec 25', 1.251, 0.141, 0.195, 0.224, 0.015, 0],
+  ['Jan 26', 1.246, 0.168, 0.186, 0.201, 0.014, 0], ['Feb 26', 1.122, 0.132, 0.17, 0.172, 0.024, 0],
+  ['Mar 26', 1.036, 0.118, 0.178, 0.176, 0.027, 0], ['Apr 26', 0.927, 0.102, 0.159, 0.168, 0.023, 0],
+  ['May 26', 0.981, 0.103, 0.163, 0.177, 0.025, 0], ['Jun 26', 0.935, 0.12, 0.156, 0.179, 0.026, 0.0004],
+  ['Jul 26', 0.74, 0.091, 0.155, 0.175, 0.025, 0.0028], ['Aug 26', 0.774, 0.125, 0.161, 0.168, 0.025, 0.0031],
+  ['Sep 26', 0.877, 0.146, 0.162, 0.175, 0.024, 0.003], ['Oct 26*', 0.927, 0.189, 0.152, 0.192, 0.023, 0],
+];
+// Derived rows: [month, total, airline, non-airline, bag, seat, tp, ceg, lp]
+const OV_TREND = OV_MARGIN.map(([m, bag, seat, tp, ceg, lp, cf]) =>
+  [m, bag + seat + tp + ceg + lp + cf, bag + seat, tp + ceg + lp + cf, bag, seat, tp, ceg, lp]);
+// 90-day itineraries by airline (bags/seats) vs non-airline (trip protection, CEG, luggage protection, CFAR) purchase:
+// [route, group, itineraries, airline margin, non-airline margin]
+const OV_AIR = [
+  ['Domestic', 'Airline only', 94778, 931995, 0], ['Domestic', 'Both', 8248, 94176, 56546],
+  ['Domestic', 'Non-airline only', 43936, 0, 257434], ['Domestic', 'None', 1498975, 0, 0],
+  ['International', 'Airline only', 97531, 1403121, 0], ['International', 'Both', 11027, 180658, 115235],
+  ['International', 'Non-airline only', 50517, 0, 516456], ['International', 'None', 806607, 0, 0],
+];
+const OV_LEAD = [['0–3 days', 629847, 9.079, 0.886], ['4–7 days', 386839, 9.374, 0.938], ['8–14 days', 382532, 9.859, 1.169],
+                 ['15–30 days', 460503, 11.868, 1.282], ['31–60 days', 387572, 14.372, 1.601], ['61+ days', 364326, 17.711, 2.681]];
+const OV_PLATFORM = [['App', 2079699, 10.904, 1.209], ['Desktop web', 338789, 15.824, 2.195], ['Mobile web', 193131, 13.289, 1.54]];
+const OV_TRIP = [['One-way', 1617860, 10.139, 0.971], ['Round-trip', 993729, 14.29, 1.997]];
+const SERIES_TOTAL = [
+  { i: 1, name: 'Total', color: '#ffffff', w: 3.5, glow: true },
+  { i: 2, name: 'Airline', color: '#38bdf8', w: 2.5 },
+  { i: 3, name: 'Non-airline', color: '#34d399', w: 2.5, dash: '5 4' },
+];
+const SERIES_ANC = [
+  { i: 4, name: 'Paid Bags', color: '#38bdf8', w: 2.5 },
+  { i: 5, name: 'Paid Seats', color: '#a78bfa', w: 2 },
+  { i: 6, name: 'Trip Prot.', color: '#34d399', w: 2 },
+  { i: 7, name: 'CEG', color: '#fbbf24', w: 2 },
+  { i: 8, name: 'Luggage Prot.', color: '#fb7185', w: 2 },
+];
+const usd2 = v => '$' + v.toFixed(2);
+
+function lineChart(series, maxY, ticks, W, R, annotate) {
+  const H = 200, L = 36, T = 14, B = 20;
+  const x = j => L + j * (W - L - R) / (OV_TREND.length - 1);
+  const y = v => T + (1 - v / maxY) * (H - T - B);
+  const grid = ticks.map(v => `
+    <line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(255,255,255,.08)"/>
+    <text x="${L - 6}" y="${y(v) + 3.5}" text-anchor="end" class="ax">${usd2(v)}</text>`).join('');
+  const xl = OV_TREND.map((r, j) => j % 2 ? '' : `<text x="${x(j)}" y="${H - 4}" text-anchor="middle" class="ax">${r[0]}</text>`).join('');
+  const ends = [];
+  const lines = series.map(s => {
+    const pts = OV_TREND.map((r, j) => `${x(j).toFixed(1)},${y(r[s.i]).toFixed(1)}`).join(' ');
+    const last = OV_TREND[OV_TREND.length - 1][s.i];
+    ends.push({ y: y(last), s, last });
+    return `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="${s.w}" stroke-linejoin="round" stroke-linecap="round" ${s.dash ? `stroke-dasharray="${s.dash}"` : ''} ${s.glow ? 'filter="url(#glow)"' : ''}/>`;
+  }).join('');
+  ends.sort((a, b) => a.y - b.y);
+  for (let k = 1; k < ends.length; k++) ends[k].y = Math.max(ends[k].y, ends[k - 1].y + 13);
+  const overflow = ends.length ? ends[ends.length - 1].y - (H - B) : 0;
+  if (overflow > 0) ends.forEach(e => e.y -= overflow);
+  const labels = ends.map(e => `<text x="${W - R + 7}" y="${e.y + 4}" class="lab" fill="${e.s.color}">${e.s.name} ${usd2(e.last)}</text>`).join('');
+  const ann = (annotate || []).map(([j, i, below]) => {
+    const v = OV_TREND[j][i];
+    return `<circle cx="${x(j)}" cy="${y(v)}" r="3.5" fill="#fff"/><text x="${x(j)}" y="${below ? y(v) + 17 : y(v) - 8}" text-anchor="middle" class="ann">${usd2(v)}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+    <defs><filter id="glow" x="-10%" y="-50%" width="120%" height="200%"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+    ${grid}${xl}${lines}${ann}${labels}</svg>`;
+}
+
+function trendCharts() {
+  return `
+    <div class="chart-pair">
+      <div><div class="chart-sub">Total vs airline / non-airline</div>${lineChart(SERIES_TOTAL, 2, [0, 0.5, 1, 1.5, 2], 340, 104, [[1, 1], [8, 1, true]])}</div>
+      <div><div class="chart-sub">By ancillary</div>${lineChart(SERIES_ANC, 1.4, [0, 0.35, 0.7, 1.05, 1.4], 400, 118, [[1, 4], [8, 4, true]])}</div>
+    </div>`;
+}
+
+function miniRows(rows, max, fmtV, fmtS) {
+  return rows.map(r => `
+    <div class="row">
+      <span class="lbl">${r.label}</span>
+      <span class="num">${fmtV(r.v)}</span>
+      <span class="mpi">${fmtS(r.s)}</span>
+      <span class="bar"><i style="width:${Math.max(2, r.v / max * 100)}%"></i></span>
+    </div>`).join('');
+}
+
+function overviewSlide() {
+  const tot = OV_COUNT.reduce((a, r) => a + r[1], 0);
+  const attached = tot - OV_COUNT[0][1];
+  const multi = OV_COUNT[2][1] + OV_COUNT[3][1];
+  const margin = OV_COUNT.reduce((a, r) => a + r[1] * r[2], 0);
+  const multiMargin = OV_COUNT[2][1] * OV_COUNT[2][2] + OV_COUNT[3][1] * OV_COUNT[3][2];
+  const pct = (a, b) => (a / b * 100);
+  const imgs = ANCILLARIES.map(a => `<div><img src="${a.img}" alt="${a.name}"><span>${a.name}</span></div>`).join('');
+  const cnt = OV_COUNT.slice(1).map(r => ({ label: `${r[0]} ancillar${r[0] === '1' ? 'y' : 'ies'}`, v: pct(r[1], attached), s: r[2] }));
+  const lead = OV_LEAD.map(r => ({ label: r[0], v: r[2], s: r[3] }));
+  const air = (rows) => {
+    const n = rows.reduce((a, r) => a + r[2], 0);
+    const has = g => rows.filter(r => g.includes(r[1])).reduce((a, r) => a + r[2], 0);
+    return {
+      n, both: has(['Both']),
+      any: pct(n - has(['None']), n),
+      air: pct(has(['Airline only', 'Both']), n), nonAir: pct(has(['Non-airline only', 'Both']), n),
+      airBuyers: has(['Airline only', 'Both']), nonBuyers: has(['Non-airline only', 'Both']),
+      airM: rows.reduce((a, r) => a + r[3], 0), nonM: rows.reduce((a, r) => a + r[4], 0),
+    };
+  };
+  const airAll = air(OV_AIR);
+  const airRoute = ['Domestic', 'International'].map(rt => [rt, air(OV_AIR.filter(r => r[0] === rt))]);
+  const airShare = pct(airAll.airM, airAll.airM + airAll.nonM);
+  const airRows = [
+    { label: 'Airline (Bags, Seats)', v: airAll.air, s: airAll.airM / airAll.n },
+    { label: 'Non-airline (other 4)', v: airAll.nonAir, s: airAll.nonM / airAll.n },
+  ];
+  const airRouteRows = airRoute.flatMap(([rt, d]) => [
+    { label: `${rt === 'Domestic' ? 'Dom.' : 'Intl.'} · Airline`, v: d.air, s: d.airM / d.n },
+    { label: `${rt === 'Domestic' ? 'Dom.' : 'Intl.'} · Non-airline`, v: d.nonAir, s: d.nonM / d.n },
+  ]);
+  const routeRows = airRoute.map(([rt, d]) => ({ label: rt, v: d.any, s: (d.airM + d.nonM) / d.n }));
+  const pf = [...OV_PLATFORM, ...OV_TRIP].map(r => ({ label: r[0], v: r[2], s: r[3] }));
+  const cols3 = '1fr 54px 50px';
+  return `
+  <section class="slide overview" style="--accent:#7dd3fc;--accent2:#c084fc">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+    <div class="header">
+      <div>
+        <div class="eyebrow">Ancillary overview · all products</div>
+        <div class="title"><span>All Ancillaries</span></div>
+        <div class="subtitle">Add-on uptake, multi-buying, airline vs non-airline mix, and margin trend</div>
+      </div>
+      <div class="chips">
+        <div class="glass chip">Snapshot: last 90 days · Trend: last 12 months</div>
+        <div class="glass chip">${fmtNum(tot)} itineraries (90d)</div>
+      </div>
+    </div>
+
+    <div class="body">
+      <div class="glass hero">
+        <div class="collage">${imgs}</div>
+        <div class="kpi">
+          <div class="kpi-label">Any-ancillary attach rate</div>
+          <div class="kpi-value accent">${fmtPct(pct(attached, tot))}</div>
+          <div class="kpi-sub">≈ ${fmtNum(attached)} itineraries bought at least one add-on</div>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi"><div class="kpi-label">Margin / iti</div><div class="kpi-value">${fmtUsd(margin / tot)}</div><div class="kpi-sub">all 6 ancillaries</div></div>
+          <div class="kpi"><div class="kpi-label">2+ add-ons</div><div class="kpi-value">${fmtPct(pct(multi, tot))}</div><div class="kpi-sub">of all itineraries (${fmtNum(multi)})</div></div>
+          <div class="kpi"><div class="kpi-label">Multi-buyers</div><div class="kpi-value">${Math.round(pct(multi, attached))}%</div><div class="kpi-sub">of attaching itineraries</div></div>
+          <div class="kpi"><div class="kpi-label">Margin share</div><div class="kpi-value">${Math.round(pct(multiMargin, margin))}%</div><div class="kpi-sub">of ancillary margin</div></div>
+        </div>
+        ${crossPanel('any', true)}
+      </div>
+
+      <div class="right">
+        <div class="ov-row1">
+          <div class="glass panel">
+            <div class="panel-title">Ancillary margin per itinerary by booking month (last 12 months)</div>
+            <div class="chart">${trendCharts()}</div>
+          </div>
+          <div class="glass panel compact" style="--cols:${cols3}">
+            <div class="panel-title">Ancillaries per attaching itinerary</div>
+            <div class="panel-head"><span>Bought</span><span class="r">Share</span><span class="r">$/iti</span></div>
+            <div class="rows">${miniRows(cnt, 100, v => v.toFixed(1) + '%', fmtUsd)}</div>
+            <div class="stat-row">
+              <div><b>${(OV_COUNT.slice(1).reduce((a, r) => a + r[1] * parseInt(r[0]), 0) / attached).toFixed(2)}</b><span>avg add-ons per attaching itinerary</span></div>
+              <div><b>${fmtPct(pct(OV_COUNT[0][1], tot))}</b><span>of itineraries buy no add-on</span></div>
+            </div>
+            <div class="note-sm">$/iti per extra add-on: $10 → $20 → $33.</div>
+          </div>
+        </div>
+        <div class="ov-row2">
+          <div class="glass panel compact" style="--cols:${cols3}">
+            <div class="panel-title">Airline vs non-airline ancillaries</div>
+            <div class="panel-head"><span>Group</span><span class="r">Attach</span><span class="r">$/iti</span></div>
+            <div class="rows">${miniRows(airRows, 12, fmtPct, fmtUsd)}<div class="sep"></div>${miniRows(airRouteRows, 12, fmtPct, fmtUsd)}</div>
+            <div class="note-sm">Airline = <b>${Math.round(airShare)}%</b> of margin. ${fmtPct(pct(airAll.both, airAll.airBuyers))} of airline buyers also buy non-airline (${(pct(airAll.both, airAll.airBuyers) / airAll.nonAir).toFixed(1)}x base).</div>
+          </div>
+          <div class="glass panel compact" style="--cols:${cols3}">
+            <div class="panel-title">Booking lead time</div>
+            <div class="panel-head"><span>Booked ahead</span><span class="r">Attach</span><span class="r">$/iti</span></div>
+            <div class="rows">${miniRows(lead, 18, fmtPct, fmtUsd)}</div>
+          </div>
+          <div class="glass panel compact" style="--cols:${cols3}">
+            <div class="panel-title">Platform &amp; trip type</div>
+            <div class="panel-head"><span>Segment</span><span class="r">Attach</span><span class="r">$/iti</span></div>
+            <div class="rows">${miniRows(pf.slice(0, 3), 18, fmtPct, fmtUsd)}<div class="sep"></div>${miniRows(pf.slice(3), 18, fmtPct, fmtUsd)}<div class="sep"></div>${miniRows(routeRows, 18, fmtPct, fmtUsd)}</div>
+          </div>
+          <div class="glass insights">
+            <div class="panel-title">Key takeaways</div>
+            <ul>
+              <li><b>Multi-buyers are few but valuable:</b> 13% of attaching itineraries, 25% of margin.</li>
+              <li><b>Airline add-ons drive margin:</b> bags + seats earn 73% of it (8.1% attach vs 4.4% non-airline).</li>
+              <li><b>Margin/iti fell $1.83 → $1.19 (Dec–Jul)</b>, almost all from bags; non-airline held at ~$0.36. Back to $1.48 in Oct.</li>
+              <li><b>International and early planners buy more:</b> 2.8x domestic margin/iti; 61+ days out earns 3x last-minute.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="note">
+        Any-ancillary attach = % of distinct itineraries with at least one of: Paid Bags, Paid Seats, Trip Protection, CEG (Plus + Premium), Luggage Protection, CFAR.
+        Margin uses booking-time values (CEG = revenue). * Oct 26 = 1–26 Oct. Airline = Bags, Seats; non-airline = the other 4. CFAR live Jun–Sep 2026 only (not plotted separately).
+        Source: bi_dw.fact_booking_flights · Agoda whitelabel · non-cancelled bookings.
+      </div>
+      <div>Flights Ancillaries · Product Learnings</div>
+    </div>
+  </section>`;
+}
+
+// ---------- Growth levers slide ----------
+const LEVERS = [
+  {
+    title: 'Expand market coverage', color: '#38bdf8', moves: ['Reach'],
+    stat: ['0.3%', 'Trip Protection attach in Taiwan (India 0.5%) vs 2.3% across all markets'],
+    evidence: [
+      'CEG is not sold in Taiwan at all',
+      'Luggage Protection is under 0.05% on Indonesia and Malaysia domestic routes',
+      'CFAR was live only Jun–Sep 2026',
+    ],
+    plays: ['Launch Trip Protection and CEG where they are missing', 'Extend Luggage Protection to domestic routes', 'Bring CFAR back and scale it to more markets'],
+    tests: 'Japan Domestic Trip Protection',
+  },
+  {
+    title: 'Add new ancillaries', color: '#a78bfa', moves: ['Reach', 'Attach'],
+    stat: ['88%', 'of itineraries buy no add-on today'],
+    evidence: [
+      'Luggage Protection scale-up (Feb 2026) roughly doubled its margin/iti: $0.014 → $0.027',
+      'Non-airline products hold steady at ~$0.36/iti while airline add-ons swing with demand',
+    ],
+    plays: ['Flexible ticket / change-fee waiver', 'Airport services: lounge, fast track', 'Price freeze / fare hold'],
+    tests: 'Onboard Luggage Protection, Onboard CFAR',
+  },
+  {
+    title: 'Improve UI/UX of existing ancillaries', color: '#34d399', moves: ['Attach'],
+    stat: ['$1.25 → $0.74', 'Paid Bags margin/iti, Dec 25 → Jul 26: the main driver of the margin decline'],
+    evidence: [
+      'App attaches 10.9% vs 15.8% on desktop web, and app is 80% of itineraries',
+      'Seat attach doubles with children (2.5% → 4.9–5.9%)',
+    ],
+    plays: ['Bring the app ancillary flow to desktop parity', 'Prompt seat selection for families and groups', 'Clearer bag-allowance comparison at fare selection'],
+    tests: 'Seatmap redesign, Trip Protection redesign, Multi-step booking form, Hide CEG Plus, Hide CEG Premium',
+  },
+  {
+    title: 'Optimize pricing', color: '#fbbf24', moves: ['Margin / attach'],
+    stat: ['$1.65', 'Trip Protection margin per attached itinerary in Vietnam vs $7.00 overall'],
+    evidence: [
+      'Paid Seats earn only $5.70 per attached itinerary',
+      'International CFAR earns 3.4x more per sale than domestic ($16.06 vs $4.74)',
+    ],
+    plays: ['Test price points by market and route type', 'Dynamic pricing by lead time and party size', 'Review markup on low-margin products (seats)'],
+    tests: 'Trip Protection pricing, CEG Premium pricing',
+  },
+  {
+    title: 'Personalize what to offer and what to hide', color: '#f472b6', moves: ['Attach', 'Mix'],
+    stat: ['2.6x', 'First-time international bookers attach vs repeat domestic (20.5% vs 7.8%)'],
+    evidence: [
+      'Airline-add-on buyers are 2.1x more likely to also buy a non-airline product',
+      '13% of attaching itineraries buy 2+ add-ons and drive 25% of margin',
+    ],
+    plays: ['Rank offers by propensity per segment', 'Hide overlapping or low-propensity offers to limit cannibalization', 'Bundle complementary add-ons (bags + seats)'],
+    tests: 'Remove Paid Bags when free bags available',
+  },
+];
+
+const CATALOG_TAGS = { bag: 'Airline', seat: 'Airline', tp: 'Protection', ceg: 'Agoda service', lp: 'Protection', cf: 'Protection' };
+function titleSlide() {
+  const icons = {
+    bag: '<rect x="-11" y="-6" width="22" height="16" rx="3"/><path d="M-5 -6v-4h10v4"/><path d="M-11 1h22"/>',
+    seat: '<path d="M-7 -12v14h12"/><path d="M-7 2l-2 10M5 2l2 10"/><path d="M-3 -2h10"/>',
+    tp: '<path d="M0 -12l10 4v6c0 7-4 11-10 14c-6-3-10-7-10-14v-6z"/><path d="M-4 1l3 3l6-6"/>',
+    ceg: '<path d="M0 -11l3.2 6.6l7.3 1l-5.3 5.1l1.3 7.3l-6.5-3.5l-6.5 3.5l1.3-7.3l-5.3-5.1l7.3-1z"/>',
+    lp: '<rect x="-8" y="-7" width="16" height="19" rx="3"/><path d="M-3 -7v-4h6v4"/><path d="M-3 3l2 2l4-4"/>',
+    cf: '<path d="M9 -2a9 9 0 1 1 -3-6.7"/><path d="M7 -13v6h-6"/><path d="M0 -4v4h3"/>'
+  };
+  const cx = 380, cy = 400, rx = 300, ry = 210;
+  const nodes = ANCILLARIES.map((a, i) => {
+    const t = -Math.PI / 2 + i * Math.PI / 3, x = cx + rx * Math.cos(t), y = cy + ry * Math.sin(t);
+    return `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)})" class="t-node" style="--c:${a.accent};animation-delay:${i * .5}s">
+      <circle r="44" fill="url(#tNodeBg)" stroke="${a.accent}" stroke-opacity=".55"/>
+      <circle r="44" fill="${a.accent}" fill-opacity=".10"/>
+      <g transform="translate(0 -6) scale(1.35)" fill="none" stroke="${a.accent}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[a.key]}</g>
+      <text y="${y > cy + 10 ? 70 : -58}" text-anchor="middle">${a.name}</text>
+      <text y="26" text-anchor="middle" class="t-plus">+$</text>
+    </g>
+    <line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${a.accent}" stroke-opacity=".18" stroke-dasharray="2 6"/>`;
+  }).join('');
+  const route = `M 40 690 C 220 560, 300 260, 560 150 S 760 60, 790 40`;
+  return `
+  <section class="slide title-slide" style="--accent:#7dd3fc;--accent2:#c084fc">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+    <div class="t-left">
+      <div class="eyebrow">Flights ancillaries · product learnings</div>
+      <h1 class="t-h1">Beyond the ticket:<br><span>making more money</span><br>on every flight</h1>
+      <div class="t-sub">What six add-ons earn today, what our experiments taught us, and the ten bets that can lift ancillary margin per itinerary.</div>
+      <div class="t-stats">
+        <div class="glass t-stat"><b>6</b><span>add-ons sold today</span></div>
+        <div class="glass t-stat"><b>8</b><span>experiments analysed</span></div>
+        <div class="glass t-stat"><b style="color:#4ade80">$1.36 → $1.79</b><span>margin / itinerary potential</span></div>
+      </div>
+    </div>
+    <svg class="t-art" viewBox="0 0 800 760" aria-hidden="true">
+      <defs>
+        <radialGradient id="tCore"><stop offset="0" stop-color="#7dd3fc" stop-opacity=".55"/><stop offset=".55" stop-color="#818cf8" stop-opacity=".18"/><stop offset="1" stop-color="#818cf8" stop-opacity="0"/></radialGradient>
+        <radialGradient id="tNodeBg" cx=".3" cy=".25"><stop offset="0" stop-color="#ffffff" stop-opacity=".22"/><stop offset="1" stop-color="#ffffff" stop-opacity=".04"/></radialGradient>
+        <linearGradient id="tRoute" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#22d3ee" stop-opacity="0"/><stop offset=".4" stop-color="#7dd3fc"/><stop offset="1" stop-color="#c084fc"/></linearGradient>
+        <linearGradient id="tPlane" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#bae6fd"/></linearGradient>
+      </defs>
+      <circle cx="${cx}" cy="${cy}" r="230" fill="url(#tCore)"/>
+      <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="#ffffff" stroke-opacity=".14"/>
+      <ellipse cx="${cx}" cy="${cy}" rx="${rx * .62}" ry="${ry * .62}" fill="none" stroke="#7dd3fc" stroke-opacity=".12" stroke-dasharray="3 7" class="t-spin"/>
+      <path d="${route}" fill="none" stroke="url(#tRoute)" stroke-width="2.5" stroke-dasharray="8 10" class="t-dash"/>
+      ${nodes}
+      <g transform="translate(${cx} ${cy})">
+        <circle r="78" fill="url(#tNodeBg)" stroke="#ffffff" stroke-opacity=".28"/>
+        <g transform="rotate(-35) scale(2.1)" fill="url(#tPlane)">
+          <path d="M0 -26c2.4 0 3.6 3 3.6 6v10l18 10v5l-18-5v10l5 4v4l-8.6-2.4L-8.6 18v-4l5-4V0l-18 5v-5l18-10v-10c0-3 1.2-6 3.6-6z"/>
+        </g>
+      </g>
+      <g class="t-flyer"><path d="M0 -9c1 0 1.5 1.2 1.5 2.4v4l7.2 4v2l-7.2-2v4l2 1.6v1.6L0 6.6L-3.5 7.6V6l2-1.6v-4l-7.2 2v-2l7.2-4v-4c0-1.2.5-2.4 1.5-2.4z" fill="#fff" transform="rotate(90)"/>
+        <animateMotion dur="9s" repeatCount="indefinite" rotate="auto" path="${route}"/></g>
+      ${[[120, 140], [690, 640], [700, 250], [90, 470], [560, 720]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${1.5 + (i % 3)}" fill="#fff" opacity=".5" class="t-twinkle" style="animation-delay:${i * .7}s"/>`).join('')}
+    </svg>
+  </section>`;
+}
+
+function catalogSlide() {
+  const all = RAW.all[0], col = c => all[COLS.indexOf(c) + 1];
+  const totMpi = ROUTE_KEYS.reduce((t, k) => t + col(k + '_mpi'), 0);
+  const cards = ANCILLARIES.map(a => `
+    <div class="glass pcard" style="--c:${a.accent}">
+      <div class="p-img"><img src="${a.img}" alt="${a.name}"></div>
+      <div class="p-main">
+        <div class="p-top"><div class="p-name">${a.name}</div><div class="p-tag">${CATALOG_TAGS[a.key]}</div></div>
+        <div class="p-desc">${a.desc}</div>
+        <div class="p-stats">
+          <div><b>${col(a.key + '_ar') < 0.1 ? col(a.key + '_ar').toFixed(3) : col(a.key + '_ar').toFixed(1)}%</b><span>Attach</span></div>
+          <div><b>$${col(a.key + '_mpa').toFixed(2)}</b><span>${a.key === 'ceg' ? 'Rev.' : 'Margin'} / sale</span></div>
+          <div><b>$${col(a.key + '_mpi').toFixed(3)}</b><span>Per itin.</span></div>
+          <div><b>${Math.max(0.1, col(a.key + '_mpi') / totMpi * 100).toFixed(totMpi && col(a.key + '_mpi') / totMpi < 0.05 ? 1 : 0)}%</b><span>Of margin</span></div>
+        </div>
+      </div>
+    </div>`).join('');
+  return `
+  <section class="slide catalog" style="--accent:#7dd3fc;--accent2:#c084fc">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+    <div class="header">
+      <div>
+        <div class="eyebrow">Flights ancillaries · what we sell</div>
+        <div class="title"><span>We sell 6 add-ons today</span></div>
+        <div class="subtitle">Two airline products, three protection products and one Agoda service, offered in the booking flow</div>
+      </div>
+      <div class="chips">
+        <div class="glass chip">Last 90 days · ${fmtNum(all[1])} itineraries</div>
+      </div>
+    </div>
+
+    <div class="cat-body">
+      <div class="glass cat-strip">
+        <div class="cs"><b>11.7%</b><span>of itineraries buy at least one add-on</span></div>
+        <div class="cs"><b>$${totMpi.toFixed(2)}</b><span>ancillary margin per itinerary</span></div>
+        <div class="cs"><b>${Math.round((col('bag_mpi') + col('seat_mpi')) / totMpi * 100)}%</b><span>of margin from airline add-ons (bags + seats)</span></div>
+        <div class="cs"><b>${Math.round(col('bag_mpi') / totMpi * 100)}%</b><span>of margin from Paid Bags alone</span></div>
+      </div>
+      <div class="cat-grid">${cards}</div>
+    </div>
+
+    <div class="footer">
+      <div class="note">
+        bi_dw.fact_booking_flights · Agoda whitelabel · non-cancelled bookings · booking date 29 Jul – 26 Oct 2026, aggregated to itinerary.
+        Attach = share of itineraries with the add-on. Per sale = margin per attached itinerary (CEG = revenue). Of margin = share of total ancillary margin per itinerary.
+      </div>
+      <div>Flights Ancillaries · Product Learnings</div>
+    </div>
+  </section>`;
+}
+
+function leversSlide() {
+  const cards = LEVERS.map((l, i) => `
+    <div class="glass lever" style="--c:${l.color}">
+      <div class="lv-top"><div class="lv-n">${i + 1}</div><div class="lv-title">${l.title}</div></div>
+      <div class="lv-tags">${l.moves.map(m => `<span>${m}</span>`).join('')}</div>
+      <div class="lv-stat"><b>${l.stat[0]}</b><span>${l.stat[1]}</span></div>
+      <div><h4>Why: what the data shows</h4><ul>${l.evidence.map(e => `<li>${e}</li>`).join('')}</ul></div>
+      <div><h4>Plays</h4><ul class="plays">${l.plays.map(e => `<li>${e}</li>`).join('')}</ul></div>
+      ${l.tests ? `<div class="lv-tests"><b>Tests run:</b> ${l.tests}</div>` : ''}
+    </div>`).join('');
+  return `
+  <section class="slide levers" style="--accent:#7dd3fc;--accent2:#c084fc">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+    <div class="header">
+      <div>
+        <div class="eyebrow">What next · growth levers</div>
+        <div class="title"><span>How we grow ancillary margin</span></div>
+        <div class="subtitle">Five levers, each moving a different part of the margin equation</div>
+      </div>
+      <div class="chips">
+        <div class="glass chip">Baseline: last 90 days</div>
+      </div>
+    </div>
+
+    <div class="lv-body">
+      <div class="glass formula">
+        <span class="f-label">Ancillary margin =</span>
+        <div class="term"><b>Itineraries reached</b><span>2.61M itineraries</span><em>Levers 1, 2</em></div>
+        <span class="op">×</span>
+        <div class="term"><b>Attach rate</b><span>11.7% buy any add-on</span><em>Levers 2, 3, 5</em></div>
+        <span class="op">×</span>
+        <div class="term"><b>Margin per attach</b><span>$11.60 per attaching itinerary</span><em>Levers 4, 5</em></div>
+        <span class="op">=</span>
+        <div class="term res"><b>$1.36</b><span>margin per itinerary</span></div>
+      </div>
+      <div class="lv-grid">${cards}</div>
+    </div>
+
+    <div class="footer">
+      <div class="note">
+        Evidence from the previous slides: bi_dw.fact_booking_flights · Agoda whitelabel · non-cancelled bookings · last 90 days (trend: last 12 months).
+        Margin per attach = ancillary margin / itineraries with at least one add-on. Plays are candidate ideas to size and test, not validated results.
+      </div>
+      <div>Flights Ancillaries · Product Learnings</div>
+    </div>
+  </section>`;
+}
+
+// ---------- Opportunity sizing slide ----------
+// Mid / low / high in $ ancillary margin per itinerary over the last-90-day baseline; proven = already measured in an A/B test.
+const OPPORTUNITY = [
+  { lever: 6, title: 'Increase bags / seats coverage', short: 'Bags / seats coverage', color: '#f97316', mid: 0.235, lo: 0.12, hi: 0.27, conf: 'Medium: connector work', logic: [
+    '<b>Bags:</b> +10% coverage at today\'s attach and $14 per sale = 10% of $0.85 = <b>+$0.085</b>.',
+    '<b>Seats:</b> coverage doubled (+100%) at today\'s attach and $5.70 per sale = <b>+$0.15</b>.',
+    'Low: newly covered airlines attach at half today\'s rate. High: adds bag spill-over from seats (+4%, seen in the seatmap fix).',
+  ] },
+  { lever: 3, mid: 0.15, lo: 0.08, hi: 0.20, proven: 0.07, conf: 'High for $0.07 proven', logic: [
+    '<b>Proven: +$0.055</b> from Premium-only CEG (+4.0%, z≈2.8) and <b>+$0.015</b> from the seatmap aisle fix (+1.1%).',
+    '<b>App parity:</b> app earns $1.21/iti vs $2.20 on desktop. Closing 10% of the gap on 80% of itineraries = <b>+$0.08</b>.',
+    'Most of the gap is mix (route, trip type), so 10% is a conservative share for UX alone.',
+  ] },
+  { lever: 2, mid: 0.05, lo: 0.02, hi: 0.08, conf: 'Medium', logic: [
+    '<b>CFAR relaunch: +$0.022</b>, measured in test (over 80% incremental).',
+    '<b>Two non-protection products</b> (flex ticket, airport services): 0.3% attach × $10 per sale, half cannibalized = <b>+$0.015 each</b>.',
+    'No more protection add-ons: Luggage Protection was −$0.024 net.',
+  ] },
+  { lever: 4, mid: 0.05, lo: 0.03, hi: 0.08, conf: 'Medium', logic: [
+    '<b>Bags:</b> +5% margin per sale at −0.5 elasticity = +2.5% of $0.85 = <b>+$0.021</b>.',
+    '<b>Non-airline dynamic pricing</b> (lead time, party size): +5% of $0.36 = <b>+$0.018</b>.',
+    '<b>Seats</b> +$0.006 (entry card raised $/sale 3.9% at flat attach); <b>Vietnam TP</b> $1.65 → $4 per sale +$0.003.',
+  ] },
+  { lever: 5, mid: 0.045, lo: 0.02, hi: 0.07, conf: 'Medium-low', logic: [
+    '<b>Limit cannibalization:</b> new protection products lost ~3/4 of their margin to TP/CEG. Offering one protection product by propensity recovers half = <b>+$0.02</b>.',
+    '<b>Bundle / prompt</b> bags + seats for families and groups: +2% airline attach = <b>+$0.02</b>.',
+    '<b>Market-level CEG tiers</b> (cheap tier in Thailand / Indonesia): <b>+$0.005</b>.',
+  ] },
+  { lever: 1, mid: 0.02, lo: 0.01, hi: 0.03, conf: 'Medium', logic: [
+    '<b>Taiwan</b> (4.6% of itins): TP 0.3% → 2.0% at $5.6 per sale, and launch CEG at 1.7% × $10.3 = <b>+$0.012</b>.',
+    '<b>India</b> TP 0.5% → 2.0% at $3.1 per sale = <b>+$0.002</b>.',
+    '<b>Domestic gaps</b> (Korea/Japan TP, Indonesia/Malaysia LP) at the Japan-domestic test rate (+$0.08/iti) on ~5% of itins = <b>+$0.004</b>.',
+  ] },
+];
+function opportunitySlide() {
+  const base = 1.36, itisYr = RAW.all[0][1] * 365 / 90, max = 0.30, overlap = 0.15;
+  const gross = OPPORTUNITY.reduce((t, o) => t + o.mid, 0), net = gross * (1 - overlap);
+  const usdM = v => '$' + (v * itisYr / 1e6).toFixed(1) + 'M';
+  const pct = v => (v / max * 100).toFixed(2) + '%';
+  const short = { 1: 'Expand market coverage', 2: 'Add new ancillaries', 3: 'Improve UI/UX', 4: 'Optimize pricing', 5: 'Personalize offer / hide' };
+  const lev = o => LEVERS[o.lever - 1] || { title: o.title, color: o.color };
+  const bars = OPPORTUNITY.map(o => { const l = lev(o); return `
+        <div class="op-row" style="--c:${l.color}">
+          <div class="op-name"><i>${o.lever}</i>${o.short || short[o.lever]}</div>
+          <div class="op-track"><div class="mid" style="width:${pct(o.mid)}"></div>${o.proven ? `<div class="proven" style="width:${pct(o.proven)}"></div>` : ''}<div class="rng" style="left:${pct(o.lo)};width:${pct(o.hi - o.lo)}"></div></div>
+          <div class="op-v">+$${o.mid.toFixed(3).replace(/0$/, '')}</div>
+          <div class="op-y">${usdM(o.mid)} / yr</div>
+        </div>`; }).join('');
+  const cards = OPPORTUNITY.map(o => { const l = lev(o); return `
+      <div class="glass ocard" style="--c:${l.color}">
+        <div class="oc-top"><i>${o.lever}</i>${l.title}</div>
+        <div class="oc-v">+$${o.mid.toFixed(3).replace(/0$/, '')}<small>/iti · $${o.lo.toFixed(2)}–${o.hi.toFixed(2)}</small></div>
+        <div class="oc-conf">${o.conf}</div>
+        <ul>${o.logic.map(t => `<li>${t}</li>`).join('')}</ul>
+      </div>`; }).join('');
+  return `
+  <section class="slide opp" style="--accent:#34d399;--accent2:#7dd3fc">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+    <div class="header">
+      <div>
+        <div class="eyebrow">What next · opportunity sizing</div>
+        <div class="title"><span>Bags/seats coverage + UI/UX: 70% of the upside</span></div>
+        <div class="subtitle">Estimated gain in ancillary margin per itinerary from each of six levers, over today's $${base.toFixed(2)}</div>
+      </div>
+      <div class="chips">
+        <div class="glass chip">Baseline: last 90 days</div>
+        <div class="glass chip">~${(itisYr / 1e6).toFixed(1)}M itineraries / yr</div>
+      </div>
+    </div>
+
+    <div class="op-body">
+      <div class="op-top">
+        <div class="glass op-bars">
+          <div class="op-head"><span>Lever</span><span>Mid estimate with low–high range</span><span>$ / itin.</span><span>Per year</span></div>
+          ${bars}
+          <div class="op-legend"><span><b style="background:linear-gradient(90deg,#34d39955,#34d399)"></b>Mid estimate</span><span><b style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.6) 0 3px,transparent 3px 6px)"></b>Already proven in A/B tests</span><span><b style="height:3px;background:#8e9ac0"></b>Low–high range</span></div>
+        </div>
+        <div class="glass op-total">
+          <div class="panel-title">Total opportunity</div>
+          <div class="big">$${base.toFixed(2)} → $${(base + net).toFixed(2)}</div>
+          <div class="sub"><b>+$${net.toFixed(2)} per itinerary (+${Math.round(net / base * 100)}%)</b>, about <b>${usdM(net)} a year</b> after a ${overlap * 100}% haircut for overlap between levers.</div>
+          <div class="kv">
+            <span>Sum of mid estimates</span><b>+$${gross.toFixed(3)}</b>
+            <span>Coverage + UI/UX share</span><b>${Math.round((OPPORTUNITY[0].mid + OPPORTUNITY[1].mid) / gross * 100)}%</b>
+            <span>Already proven (UI/UX)</span><b>+$0.07</b>
+            <span>Each +$0.01 / itinerary</span><b>${usdM(0.01)} / yr</b>
+          </div>
+        </div>
+      </div>
+      <div class="op-grid">${cards}</div>
+    </div>
+
+    <div class="footer">
+      <div class="note">
+        Directional sizing, not a forecast. Baseline: bi_dw.fact_booking_flights, Agoda whitelabel, non-cancelled, 29 Jul – 26 Oct 2026 ($1.36 margin/iti, CEG at revenue). Annualized = 90-day itineraries × 365/90, flat volume.
+        Proven values from the A/B test slides; other inputs are stated assumptions. Itinerary volume held flat: the tests showed no booker impact.
+      </div>
+      <div>Flights Ancillaries · Product Learnings</div>
+    </div>
+  </section>`;
+}
+
+// ---------- TravelSure (Dohop) sizing slide ----------
+// Survey: "When booking a flight, which of these additional benefits would you be most likely to pay for? (Select up to 3)".
+// [benefit, % of respondents, tier, kind] — kind: 'sold' (we sell it), 'ts' (closest to TravelSure), 'new' (new ancillary idea), 'none'.
+const SURVEY = [
+  ['Flight Compensation', 33.8, 1, 'ts'],
+  ['Airport Lounges', 32.3, 1, 'new'],
+  ['Immigration Fast Track', 27.1, 1, 'new'],
+  ['Luggage Protection', 23.3, 2, 'sold'],
+  ['Lounge for Delay', 21.8, 2, 'ts'],
+  ['Inflight Wi-Fi', 21.0, 2, 'new'],
+  ['eSIM', 20.6, 2, 'new'],
+  ['Auto Check-In', 19.7, 2],
+  ['I would never pay for additional benefits', 14.7, 0, 'none'],
+  ['Flight Notifications', 11.9, 3],
+  ['Carbon Offset', 1.6, 3],
+];
+const LP_ACTUAL = 0.8;
+// [label, attach %, price € per passenger, cannibalization of existing add-ons]
+const TS_SCEN = [
+  ['Conservative', 'Luggage Protection-like', 0.8, 5, 0.6],
+  ['Base', 'Trip Protection-like', 2.0, 7.5, 0.4],
+  ['Upside', 'Dohop pilot case', 4.0, 7.5, 0.2],
+];
+function surveySlide() {
+  const max = 36, tierC = { 1: '#22c55e', 2: '#38bdf8', 3: '#8e9ac0', 0: '#64748b' };
+  const tag = { sold: ['Sold today', '#f472b6'], ts: ['≈ TravelSure', '#fbbf24'], new: ['New idea', '#a78bfa'] };
+  const lp = SURVEY.find(r => r[0] === 'Luggage Protection')[1], conv = LP_ACTUAL / lp, comp = SURVEY[0][1];
+  const rows = SURVEY.map(([f, v, tier, kind], i) => {
+    const t = tag[kind];
+    const sep = i > 0 && SURVEY[i - 1][2] !== tier ? ' sep' : '';
+    return `<div class="sb-row${sep}${kind === 'none' ? ' none' : ''}"><span>${f}${t ? `<span class="tag" style="color:${t[1]};border-color:${t[1]}66">${t[0]}</span>` : ''}</span>
+      <div class="t"><div style="width:${v / max * 100}%;background:${tierC[tier]}"></div></div><b>${v.toFixed(1)}%</b></div>`;
+  }).join('');
+  const tiles = [
+    { q: 'Disruption cover is the #1 paid benefit', v: 'good', vl: '33.8%', t: '<b>Flight Compensation tops the list</b>, and 21.8% would pay for a lounge during a delay. Demand for a TravelSure-type product is real.' },
+    { q: 'Airport services are a gap we don\'t fill', v: 'good', vl: 'Tier 1', t: '<b>Lounges 32.3%</b> and <b>Fast Track 27.1%</b> rank 2nd and 3rd. We sell neither today (lever 2 play).' },
+    { q: 'Stated intent is far above real purchase', v: 'part', vl: '~1 in ' + Math.round(1 / conv), t: `<b>Luggage Protection: ${lp}% say they'd pay, ${LP_ACTUAL}% actually buy</b>. Use ~${(conv * 100).toFixed(1)}% conversion of stated intent when sizing.` },
+    { q: 'Information features don\'t monetize', v: 'rej', vl: 'Tier 3', t: 'Flight Notifications 11.9% and Carbon Offset 1.6% rank below "would never pay" (14.7%). Keep them free.' },
+  ].map(m => `<div class="mtile"><div class="mq"><b>${m.q}</b><span class="vd ${m.v}">${m.vl}</span></div><p>${m.t}</p></div>`).join('');
+  return `
+  <section class="slide srv" style="--accent:#22c55e;--accent2:#38bdf8">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+    <div class="header">
+      <div>
+        <div class="eyebrow">User research · willingness to pay</div>
+        <div class="title"><span>Users would pay for disruption cover and airport services</span></div>
+        <div class="subtitle">"When booking a flight, which of these additional benefits would you be most likely to pay for?" (select up to 3)</div>
+      </div>
+      <div class="chips">
+        <div class="glass chip">85% would pay for at least one</div>
+      </div>
+    </div>
+
+    <div class="srv-body">
+      <div class="glass panel">
+        <div class="panel-title">Share of respondents who would pay</div>
+        <div class="sb-tbl">${rows}</div>
+        <div class="srv-legend"><span><b style="color:#22c55e">■</b> Tier 1</span><span><b style="color:#38bdf8">■</b> Tier 2</span><span><b style="color:#8e9ac0">■</b> Tier 3</span><span>Tiers as grouped by the research team</span></div>
+      </div>
+      <div class="srv-right">
+        <div class="glass models">
+          <div class="panel-title">What users are telling us</div>
+          <div class="mgrid">${tiles}</div>
+        </div>
+        <div class="glass insights">
+          <div class="panel-title">Implications for the ancillary roadmap</div>
+          <ul>
+            <li><b>Size TravelSure at ~${(comp * conv).toFixed(1)}% attach</b>: ${comp}% stated × ${(conv * 100).toFixed(1)}% conversion (next slide).</li>
+            <li><b>Build the offer around delay</b>: compensation plus lounge access when the flight is late.</li>
+            <li><b>Make airport services the next new ancillary</b>: lounges and fast track, partner-led.</li>
+            <li><b>Caveat:</b> stated preference, no prices shown, multi-select.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="note">
+        Source: user survey, multi-select (up to 3), so shares add to more than 100%. Actual Luggage Protection attach: bi_dw.fact_booking_flights, Agoda whitelabel, non-cancelled, last 90 days.
+      </div>
+      <div>Flights Ancillaries · Product Learnings</div>
+    </div>
+  </section>`;
+}
+
+// Last 90 days, same base as RAW. Per key: [attach %, margin / itinerary, margin / sale]. CEG = all tiers (revenue).
+const PLATFORM = {
+  app:  { name: 'App', n: 2079616, intl: 738126, ceg_prem: 0.31,
+    bag: [5.584, .769, 13.77], seat: [2.515, .13, 5.16], tp: [2.067, .136, 6.59], ceg: [1.608, .152, 9.46], lp: [.682, .02, 2.94], cf: [.021, .002, 8.42] },
+  web:  { name: 'Desktop', n: 338774, intl: 154587, ceg_prem: 0.959,
+    bag: [8.694, 1.322, 15.21], seat: [3.06, .239, 7.81], tp: [3.311, .278, 8.39], ceg: [2.261, .308, 13.62], lp: [1.376, .044, 3.19], cf: [.031, .004, 12.61] },
+  mweb: { name: 'Mobile web', n: 193112, intl: 72979, ceg_prem: 0.397,
+    bag: [6.672, .888, 13.31], seat: [3.025, .207, 6.85], tp: [2.594, .192, 7.39], ceg: [1.968, .219, 11.14], lp: [1.072, .03, 2.82], cf: [.037, .003, 9.23] },
+};
+// Desktop by route: [attach %, margin / itinerary], used to re-weight desktop to the app's route mix.
+const PLATFORM_WEB_ROUTE = {
+  dom:  { bag: [6.478, .847], seat: [2.668, .166], tp: [2.577, .117], ceg: [1.239, .159], lp: [.597, .01], cf: [.023, .001] },
+  intl: { bag: [11.335, 1.888], seat: [3.527, .326], tp: [4.185, .47], ceg: [3.479, .486], lp: [2.305, .085], cf: [.04, .007] },
+};
+const PLATFORM_CLOSE = 0.25;
+
+function platformSlide() {
+  const P = PLATFORM, itisAll = P.app.n + P.web.n + P.mweb.n, itisYr = RAW.all[0][1] * 365 / 90;
+  const mpi = p => ROUTE_KEYS.reduce((t, k) => t + P[p][k][1], 0);
+  const totM = Object.keys(P).reduce((t, p) => t + P[p].n * mpi(p), 0);
+  const wi = P.app.intl / P.app.n, adj = (k, j) => (1 - wi) * PLATFORM_WEB_ROUTE.dom[k][j] + wi * PLATFORM_WEB_ROUTE.intl[k][j];
+  const gap = ROUTE_KEYS.reduce((t, k) => t + adj(k, 1) - P.app[k][1], 0);
+  const uplift = gap * PLATFORM_CLOSE * P.app.n / itisAll;
+  const attachFx = ROUTE_KEYS.reduce((t, k) => t + (adj(k, 0) - P.app[k][0]) / 100 * P.app[k][2], 0);
+  const bridge = [['App', 0, mpi('app'), 'base'], ['More buyers', mpi('app'), attachFx, 'up'], ['Higher price / sale', mpi('app') + attachFx, gap - attachFx, 'up'],
+    ['More international', mpi('app') + gap, mpi('web') - mpi('app') - gap, 'mix'], ['Desktop', 0, mpi('web'), 'end']];
+  const bh = v => v / mpi('web') * 150;
+  const x = (a, b) => `<span class="pf-x">${(b / a).toFixed(1)}×</span>`;
+  const maxMpi = Math.max(...ROUTE_KEYS.map(k => P.web[k][1]));
+  const cards = ['app', 'web', 'mweb'].map(p => {
+    const m = mpi(p);
+    return `<div class="glass pf-card ${p}">
+      <div class="pf-top"><div class="pf-name">${P[p].name}</div><div class="pf-val">$${m.toFixed(2)}<span> / iti</span></div></div>
+      <div class="pf-sub">${(P[p].n / itisAll * 100).toFixed(0)}% of itineraries · ${(P[p].n * m / totM * 100).toFixed(0)}% of margin · ${(P[p].intl / P[p].n * 100).toFixed(0)}% international</div>
+      <div class="pf-stack">${ROUTE_KEYS.map(k => `<i style="width:${P[p][k][1] / mpi('web') * 100}%;background:${ANCILLARIES.find(a => a.key === k).accent}"></i>`).join('')}</div>
+    </div>`;
+  }).join('');
+  const rows = ANCILLARIES.map(a => {
+    const k = a.key, A = P.app[k], W = P.web[k], g = adj(k, 1) - A[1];
+    const ar = v => v < 0.1 ? v.toFixed(3) : v.toFixed(2);
+    return `<tr>
+      <td><span class="pf-dot" style="background:${a.accent}"></span>${a.name}</td>
+      <td class="dim">${ar(A[0])}%</td><td>${ar(W[0])}%</td><td>${x(A[0], W[0])}</td>
+      <td class="dim">$${A[2].toFixed(2)}</td><td>$${W[2].toFixed(2)}</td><td>${x(A[2], W[2])}</td>
+      <td class="pf-bars"><div><i class="a" style="width:${A[1] / maxMpi * 100}%"></i></div><div><i class="w" style="width:${W[1] / maxMpi * 100}%;background:${a.accent}"></i></div></td>
+      <td class="dim">$${A[1].toFixed(3)}</td><td>$${W[1].toFixed(3)}</td>
+      <td class="pos">+$${g.toFixed(3)}</td>
+    </tr>`;
+  }).join('');
+  return `
+  <section class="slide pf" style="--accent:#38bdf8;--accent2:#a78bfa">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+    <div class="header">
+      <div>
+        <div class="eyebrow">Platform deep dive · app vs desktop</div>
+        <div class="title"><span>Desktop earns ${(mpi('web') / mpi('app')).toFixed(1)}× more per itinerary than the app</span></div>
+        <div class="subtitle">All six add-ons, app vs desktop website (mobile web for reference), with desktop re-weighted to the app's route mix</div>
+      </div>
+      <div class="chips">
+        <div class="glass chip">Last 90 days · ${fmtNum(itisAll)} itineraries</div>
+      </div>
+    </div>
+
+    <div class="pf-body">
+      <div class="pf-left">
+        ${cards}
+        <div class="pf-legend">${ANCILLARIES.map(a => `<span><i style="background:${a.accent}"></i>${a.name}</span>`).join('')}</div>
+      </div>
+      <div class="glass panel">
+        <div class="panel-title">Six add-ons: app vs desktop</div>
+        <table class="xt pf-t">
+          <tr><th>Add-on</th><th colspan="3" style="text-align:center">Attach · app / desktop</th><th colspan="3" style="text-align:center">Margin per sale</th><th colspan="3" style="text-align:center">Margin per itinerary</th><th>Like-for-like gap</th></tr>
+          ${rows}
+          <tr class="tot"><td>All add-ons</td><td colspan="6"></td><td></td><td class="dim">$${mpi('app').toFixed(2)}</td><td>$${mpi('web').toFixed(2)}</td><td class="pos">+$${gap.toFixed(2)}</td></tr>
+        </table>
+        <div class="note-sm"><b>Like-for-like gap</b> = desktop margin per itinerary re-weighted to the app's route mix (${(wi * 100).toFixed(0)}% international vs ${(P.web.intl / P.web.n * 100).toFixed(0)}% on desktop), minus the app. Grey = app, colour = desktop. CEG = revenue, Plus and Premium.</div>
+        <div class="panel-title" style="margin-top:14px">Bridge: app to desktop margin per itinerary</div>
+        <div class="pf-bridge">${bridge.map(([l, b, v, c]) => `<div class="pf-bcol ${c}"><b>${c === 'base' || c === 'end' ? '$' + v.toFixed(2) : '+$' + v.toFixed(2)}</b><div class="pf-bwrap"><i style="height:${bh(v)}px;margin-bottom:${bh(b)}px"></i></div><span>${l}</span></div>`).join('')}
+          <div class="pf-bnote">Same route mix, desktop sells to <b>more buyers</b> (+$${attachFx.toFixed(2)}) and at a <b>higher price per sale</b> (+$${(gap - attachFx).toFixed(2)}). Desktop's heavier international mix adds only $${(mpi('web') - mpi('app') - gap).toFixed(2)}.</div>
+        </div>
+      </div>
+      <div class="glass insights">
+        <div class="panel-title">What it tells us</div>
+        <ul>
+          <li><b>App is ${(P.app.n / itisAll * 100).toFixed(0)}% of itineraries but ${(P.app.n * mpi('app') / totM * 100).toFixed(0)}% of margin.</b> Every add-on sells better on desktop, even on the same route mix (1.2–1.8× attach).</li>
+          <li><b>Price per sale is half the story.</b> Seats earn $${P.web.seat[2].toFixed(2)} vs $${P.app.seat[2].toFixed(2)} per sale on desktop, CEG $${P.web.ceg[2].toFixed(2)} vs $${P.app.ceg[2].toFixed(2)}: app buyers pick cheaper seats and CEG Plus (Premium is ${(P.app.ceg_prem / P.app.ceg[0] * 100).toFixed(0)}% of app CEG vs ${(P.web.ceg_prem / P.web.ceg[0] * 100).toFixed(0)}% on desktop).</li>
+          <li><b>Not just screen size.</b> Mobile web matches desktop on seat attach (${P.mweb.seat[0].toFixed(1)}% vs ${P.web.seat[0].toFixed(1)}%) and beats the app on all six, so the app flow itself leaves money behind.</li>
+          <li><b>Biggest app gaps:</b> Luggage Protection (${(P.web.lp[0] / P.app.lp[0]).toFixed(1)}× attach) and Trip Protection (${(P.web.tp[0] / P.app.tp[0]).toFixed(1)}×). Start with the protection placement and the seat and CEG tier defaults in the app.</li>
+        </ul>
+        <div class="kpi pf-opp">
+          <div class="kpi-label">If the app closes ${PLATFORM_CLOSE * 100}% of the like-for-like gap</div>
+          <div class="kpi-value" style="color:#4ade80">+$${uplift.toFixed(2)}<span style="font-size:14px;color:#9aa6cc;font-weight:500"> / itinerary overall</span></div>
+          <div class="kpi-sub">+${(uplift / 1.36 * 100).toFixed(0)}% on today's $1.36 · ~$${(uplift * itisYr / 1e6).toFixed(1)}M a year. Desktop users self-select (planners, longer trips), so the full gap is not reachable.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="note">Agoda whitelabel, non-cancelled flight itineraries booked 29 Jul–26 Oct 2026 (bi_dw.fact_booking_flights, platform_group_name). Margin = booking-time original margin; CEG = selling amount.</div>
+      <div>Flights Ancillaries · Product Learnings</div>
+    </div>
+  </section>`;
+}
+
+function travelSureSlide() {
+  const base = 1.36, itisYr = RAW.all[0][1] * 365 / 90, eligible = 0.944, pax = 1.43, eur = 1.08, take = 0.30;
+  const sc = TS_SCEN.map(([n, like, ar, price, cann]) => {
+    const perSale = price * eur * pax * take, gross = eligible * ar / 100 * perSale, net = gross * (1 - cann);
+    return { n, like, ar, price, cann, perSale, gross, net };
+  });
+  const cell = (f, i) => `<td class="${i === 1 ? 'base' : ''}">${f(sc[i])}</td>`;
+  const row = (lbl, f, cls = '') => `<tr class="${cls}"><td class="lbl">${lbl}</td>${sc.map((_, i) => cell(f, i)).join('')}</tr>`;
+  const attach = [['Dohop upside', 10, 'partner'], ['Dohop base', 7, 'partner'], ['Dohop pilot', 4, 'partner'],
+    ['Trip Protection', 2.27, 'ours'], ['CEG', 1.72, 'ours'], ['Luggage Prot.', 0.8, 'ours'], ['CFAR (test)', 0.29, 'ours']];
+  const usdM = v => '$' + (v * itisYr / 1e6).toFixed(2) + 'M';
+  const b = sc[1];
+  const tiles = [
+    { q: '“4–10% attach is realistic”', v: 'rej', vl: 'Unlikely', t: 'Dohop\'s base (7%) is <b>3x our best non-airline add-on</b> (Trip Protection 2.3%). Its pilot case (4%) equals TP and CEG combined.' },
+    { q: '“It is a new, separate need”', v: 'part', vl: 'Overlaps', t: 'CEG already sells 24/7 human support; TP covers delays. Our protection launches lost <b>20–75% of their margin</b> to existing add-ons.' },
+    { q: '“Direct-only covers our risky trips”', v: 'part', vl: 'Partly', t: 'Non-stop is <b>94% of itineraries</b>, but connecting international trips buy most protection (TP 3.9%, CEG 4.3%) and are excluded.' },
+    { q: '“Users want disruption help”', v: 'good', vl: 'Confirmed', t: 'Flight Compensation is the <b>#1 paid benefit (33.8%)</b>, lounge for delay 21.8%. At LP\'s stated-to-actual rate, that is <b>~1.2% attach</b>.' },
+  ].map(m => `<div class="mtile"><div class="mq"><b>${m.q}</b><span class="vd ${m.v}">${m.vl}</span></div><p>${m.t}</p></div>`).join('');
+  return `
+  <section class="slide ts" style="--accent:#f472b6;--accent2:#818cf8">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+    <div class="header">
+      <div>
+        <div class="eyebrow">New ancillary candidate · TravelSure by Dohop</div>
+        <div class="title"><span>TravelSure: ~$${b.net.toFixed(2)} per itinerary in our base case</span></div>
+        <div class="subtitle">Disruption-recovery add-on for direct flights, sized with our own attach, price and cannibalization data</div>
+      </div>
+      <div class="chips">
+        <div class="glass chip">Partner deck · May 2026</div>
+        <button class="glass chip bside-btn" data-img="img/hopper_experience.png" data-cap="Hopper · Premium Disruption Assistance ($50 per traveller, BKK → NRT)">&#9638; Hopper Experience</button>
+      </div>
+    </div>
+
+    <div class="ts-body">
+      <div class="ts-row1">
+        <div class="glass panel">
+          <div class="panel-title">The product and the partner's case</div>
+          <div class="p-desc">Help kicks in at <b>3 h delay</b> or cancellation: Dohop rebooks on <b>any airline</b>, 24/7 human support, traveller keeps airline refunds. Service contract, not insurance. Partner case: <b>4–10% attach at €5–10 per passenger</b>, quoted as revenue with no cannibalization.</div>
+          <div class="panel-title" style="margin-top:4px">Attach rate: partner case vs what we sell today</div>
+          ${attach.map(([l, v, k]) => `<div class="abar ${k}"><span>${l}</span><div class="t"><div style="width:${v / 10 * 100}%"></div></div><b>${v}%</b></div>`).join('')}
+        </div>
+        <div class="glass panel">
+          <div class="panel-title">Margin per itinerary: three scenarios</div>
+          <table class="xt sc">
+            <tr><th style="text-align:left">Driver</th>${sc.map((x, i) => `<th class="${i === 1 ? 'base' : ''}">${x.n}<br><span style="text-transform:none;letter-spacing:0;font-weight:500">${x.like}</span></th>`).join('')}</tr>
+            ${row('Eligible itineraries (non-stop)', () => '94%')}
+            ${row('Attach rate', x => x.ar.toFixed(1) + '%')}
+            ${row('Price per passenger', x => '€' + x.price.toFixed(x.price % 1 ? 1 : 0))}
+            ${row('Passengers per itinerary', () => pax.toFixed(2))}
+            ${row('Agoda share of price', () => Math.round(take * 100) + '%')}
+            ${row('Agoda margin per sale', x => '$' + x.perSale.toFixed(2))}
+            ${row('Gross margin / itinerary', x => '$' + x.gross.toFixed(3))}
+            ${row('Lost from TP / CEG / LP', x => '−' + Math.round(x.cann * 100) + '%')}
+            ${row('Net margin / itinerary', x => '+$' + x.net.toFixed(3), 'res')}
+            ${row('Per year', x => usdM(x.net))}
+            ${row('vs today\'s $1.36', x => '+' + (x.net / base * 100).toFixed(1) + '%')}
+          </table>
+          <div class="note-sm">€1 = $1.08. Lost share from our tests: CFAR ~20%, LP and Japan TP ~75%. Agoda share assumes Dohop carries servicing and claims cost.</div>
+        </div>
+      </div>
+      <div class="ex-row2">
+        <div class="glass models">
+          <div class="panel-title">Partner assumptions tested against our data</div>
+          <div class="mgrid">${tiles}</div>
+        </div>
+        <div class="glass insights">
+          <div class="panel-title">Recommendation</div>
+          <ul>
+            <li><b>Plan on ~$${b.net.toFixed(2)}/iti (~${usdM(b.net)}/yr)</b>, not the partner's case; it fits lever 2's $0.02–0.08 range.</li>
+            <li><b>Pilot it as part of CEG Premium</b> (rebook on any airline): customers trade up to Premium (55% in Hide CEG Plus).</li>
+            <li><b>If standalone, A/B test on international non-stop</b>; success = portfolio margin ≥ +$0.02/iti, not attach.</li>
+            <li><b>Add lounge access on delay</b> to the offer: 21.8% say they would pay for it.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="note">
+        Our data: bi_dw.fact_booking_flights, Agoda whitelabel, non-cancelled, 29 Jul – 26 Oct 2026 (non-stop share, passengers per itinerary, attach rates). Partner figures from the Dohop TravelSure deck (May 2026). Survey: previous slide.
+        Scenarios are directional; Agoda share, price and cannibalization are assumptions to validate in a pilot.
+      </div>
+      <div>Flights Ancillaries · Product Learnings</div>
+    </div>
+  </section>`;
+}
+
+// ---------- Final waterfall: top 10 initiatives ----------
+// [initiative, $ margin per itinerary, lever number, evidence]
+const WATERFALL = [
+  ['Double seat coverage', 0.15, 6, 'Estimate'],
+  ['+10% bag coverage', 0.085, 6, 'Estimate'],
+  ['App ancillary flow at desktop parity', 0.08, 3, 'Estimate'],
+  ['CEG Premium only (Plus hidden)', 0.055, 3, 'Proven'],
+  ['TravelSure inside CEG Premium', 0.039, 2, 'Estimate'],
+  ['Relaunch CFAR, international first', 0.022, 2, 'Measured'],
+  ['Bags +5% margin per sale', 0.021, 4, 'Estimate'],
+  ['One protection product by propensity', 0.02, 5, 'Estimate'],
+  ['Bags + seats prompt for families', 0.02, 5, 'Estimate'],
+  ['Dynamic pricing on non-airline', 0.018, 4, 'Estimate'],
+];
+function waterfallSlide() {
+  const base = 1.36, overlap = 0.15, itisYr = RAW.all[0][1] * 365 / 90;
+  const lvColor = { 1: '#38bdf8', 2: '#a78bfa', 3: '#34d399', 4: '#fbbf24', 5: '#f472b6', 6: '#f97316' };
+  const lvName = { 1: 'Market coverage', 2: 'New ancillaries', 3: 'UI/UX', 4: 'Pricing', 5: 'Personalize', 6: 'Bags / seats coverage' };
+  const evC = { Proven: '#4ade80', Measured: '#22d3ee', Estimate: '#8e9ac0' };
+  const gross = WATERFALL.reduce((t, w) => t + w[1], 0), hair = gross * overlap, end = base + gross - hair;
+  const lo = 1.2, hi = 1.95, y = v => ((v - lo) / (hi - lo) * 100).toFixed(2) + '%';
+  const cols = [], names = [];
+  const col = (bottom, top, cls, c, val, valCls = '', link = true) => cols.push(`
+          <div class="wf-col" style="--c:${c}">
+            <div class="wf-bar ${cls}" style="bottom:${y(bottom)};height:calc(${y(top)} - ${y(bottom)})"></div>
+            <div class="wf-val ${valCls}" style="bottom:calc(${y(top)} + 6px)">${val}</div>
+            ${link ? `<div class="wf-link" style="bottom:${y(top)}"></div>` : ''}
+          </div>`);
+  col(lo, base, 'total', '#e2e8f0', '$' + base.toFixed(2), 'big');
+  names.push('<div class="wf-name"><b>Today</b><br>last 90 days</div>');
+  let run = base;
+  WATERFALL.forEach(([n, v, l, ev]) => {
+    col(run, run + v, ev === 'Proven' ? 'proven' : '', lvColor[l], '+$' + v.toFixed(3).replace(/0$/, ''));
+    names.push(`<div class="wf-name">${n}<br><i style="color:${evC[ev]};border-color:${evC[ev]}66">${ev}</i></div>`);
+    run += v;
+  });
+  col(run - hair, run, 'neg', '#fb7185', '−$' + hair.toFixed(3));
+  names.push(`<div class="wf-name">Overlap between initiatives<br><i style="color:#fb7185;border-color:#fb718566">−${overlap * 100}%</i></div>`);
+  col(lo, end, 'end', '#fff', '$' + end.toFixed(2), 'big', false);
+  names.push(`<div class="wf-name"><b>Potential</b><br>+${Math.round((end - base) / base * 100)}%</div>`);
+  const ticks = [1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9];
+  const usdM = v => '$' + (v * itisYr / 1e6).toFixed(1) + 'M';
+  const proven = WATERFALL.filter(w => w[3] !== 'Estimate').reduce((t, w) => t + w[1], 0);
+  const cov = WATERFALL.filter(w => w[2] === 6).reduce((t, w) => t + w[1], 0);
+  const price = WATERFALL.filter(w => w[2] === 4 || w[2] === 5).reduce((t, w) => t + w[1], 0);
+  return `
+  <section class="slide wf" style="--accent:#34d399;--accent2:#22d3ee">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+    <div class="header">
+      <div>
+        <div class="eyebrow">Summary · top 10 initiatives</div>
+        <div class="title"><span>From $${base.toFixed(2)} to $${end.toFixed(2)} ancillary margin per itinerary</span></div>
+        <div class="subtitle">Ten initiatives ranked by size; together +$${(end - base).toFixed(2)} per itinerary (+${Math.round((end - base) / base * 100)}%) after overlap</div>
+      </div>
+      <div class="chips">
+        <div class="glass chip">~${usdM(end - base)} a year</div>
+        <div class="glass chip">Baseline: last 90 days</div>
+      </div>
+    </div>
+
+    <div class="wf-body">
+      <div class="glass wf-chart">
+        <div class="wf-area">
+          <div class="wf-axis">${ticks.map(t => `<span style="bottom:${y(t)}">$${t.toFixed(2)}</span>`).join('')}</div>
+          <div class="wf-plot">
+            ${ticks.map(t => `<div class="wf-grid" style="bottom:${y(t)}"></div>`).join('')}
+            ${cols.join('')}
+          </div>
+        </div>
+        <div class="wf-names"><div></div>${names.join('')}</div>
+        <div class="wf-legend">
+          ${[6, 3, 2, 4, 5].map(l => `<span><b style="background:${lvColor[l]}"></b>${lvName[l]}</span>`).join('')}
+          <span><b style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.6) 0 3px,transparent 3px 6px)"></b>Proven in A/B test</span>
+          <span>Axis starts at $1.20</span>
+        </div>
+      </div>
+      <div class="wf-row2">
+        <div class="glass wf-box"><div class="panel-title">Lock in what is proven</div><p><b>+$${proven.toFixed(3)}</b> already measured: Premium-only CEG is live at 100%, and CFAR showed +$0.022 in test. Ship and protect these first.</p></div>
+        <div class="glass wf-box"><div class="panel-title">Biggest bets: coverage and app</div><p><b>+$${cov.toFixed(3)}</b> from seat and bag coverage plus <b>+$0.08</b> from app parity. Needs connector and app-flow investment; size with an engineering plan.</p></div>
+        <div class="glass wf-box"><div class="panel-title">Cheap tests to run next</div><p><b>+$${price.toFixed(3)}</b> from pricing and personalization: bag price points, non-airline dynamic pricing, one protection offer per user, family prompts.</p></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="note">
+        Directional sizing from the opportunity slide and the A/B tests in this deck; baseline $1.36 margin/iti (bi_dw.fact_booking_flights, Agoda whitelabel, non-cancelled, 29 Jul – 26 Oct 2026; CEG at revenue). Annualized at ~${(itisYr / 1e6).toFixed(1)}M itineraries/yr.
+        Not in the top 10: seatmap aisle fix (+$0.015, proven), airport services (+$0.015), market coverage gaps (+$0.02), seat and Vietnam TP pricing (+$0.009).
+      </div>
+      <div>Flights Ancillaries · Product Learnings</div>
+    </div>
+  </section>`;
+}
+
+// ---------- New-ancillary experiment slides ----------
+// Variant comparison built by joining bi_dw.fact_booking_flights (tracking_cookie_id, all bookings incl. cancelled,
+// Agoda whitelabel) to trafficdw.user_exp_runs_daily (userid, users allocated to a single variant).
+// products: [name, attachA %, attachB %, $/itiA, $/itiB, isNew]
+// platform: [name, itisA, itisB, newAttachB %, otherA %, otherB %, $/itiA, $/itiB]  (other = bags, seats, CEG (+LP))
+// cross:    [label, itisA, itisB, newAttachB %, new $/sale, tpA %, tpB %, $/itiA, $/itiB]
+const EXPERIMENTS = [
+  {
+    name: 'Onboard Luggage Protection', short: 'Luggage Prot.', tag: 'LP', img: 'img/luggage_protection.jpg', accent: '#f472b6', accent2: '#818cf8',
+    bside: 'img/luggageprotection.png',
+    id: 'SKYA-9824', run: 'Main run 1307086 (pilot 1299620, Oct 2025)', dates: '12–31 Dec 2025',
+    calculon: ['Flat', '−16.3 LTC IIPD · p = 0.56'],
+    alloc: [100460999, 100463462], bookers: [227499, 227302], calcBookings: [10528809, 10532628],
+    n: [297540, 297265], any: [14.494, 14.774], total: [1.8452, 1.8212], sd: [7.194, 7.101],
+    products: [
+      ['Luggage Protection', 0, 0.949, 0, 0.030, true],
+      ['Trip Protection', 2.567, 2.420, 0.2055, 0.1921],
+      ['CEG', 2.497, 2.416, 0.2387, 0.2299],
+      ['Paid Bags', 8.771, 8.773, 1.2557, 1.2211],
+      ['Paid Seats', 2.662, 2.690, 0.1453, 0.1481],
+    ],
+    platform: [
+      ['App', 234903, 234607, 0.769, 11.71, 11.704, 1.5307, 1.5169],
+      ['Mobile web', 26412, 26405, 1.613, 14.808, 14.683, 2.495, 2.462],
+      ['Desktop web', 36225, 36253, 1.625, 17.687, 17.279, 3.4106, 3.3239],
+    ],
+    tpPlatform: [[2.234, 2.146], [3.544, 3.268], [4.019, 3.572]],
+    cross: [
+      ['Dom · Repeat', 134559, 134945, 0.278, 1.39, 1.628, 1.631, 0.7883, 0.7831],
+      ['Dom · First', 47745, 47486, 0.908, 1.56, 3.177, 2.866, 1.4116, 1.4213],
+      ['Intl · Repeat', 69616, 68914, 1.191, 3.53, 2.448, 2.255, 2.6584, 2.583],
+      ['Intl · First', 45620, 45920, 2.598, 4.05, 4.882, 4.523, 4.1753, 4.1425],
+    ],
+    models: [
+      { q: '“Customer wallet is fixed”', v: 'part', vl: 'Partly true',
+        t: '<b>New buyers came in</b> (any-ancillary attach +0.28pp, z≈3) and bags/seats held. But <b>~3/4 of LP\'s margin was offset</b> by lower Trip Protection and CEG sales.' },
+      { q: '“More options = cognitive overload”', v: 'part', vl: 'Execution-dependent',
+        t: '<b>Pilot (Oct 2025): every product fell</b>, margin −4% (z≈−2.5). <b>Main run (Dec): no spill-over</b> to bags/seats; app any-attach +0.29pp. How it is shown matters more than option count.' },
+      { q: '“Protection products substitute each other”', v: 'conf', vl: 'Confirmed',
+        t: 'Trip Protection attach <b>−5.7%</b> (z≈3.6), CEG −3%; desktop TP −11%. One lost TP sale (~$8) costs as much as <b>2.5 LP sales</b> (~$3.2 each).' },
+      { q: '“A cheap add-on is an easy win”', v: 'rej', vl: 'Rejected',
+        t: 'At ~$3 per sale LP attaches 3x more than CFAR (0.95% vs 0.29%) but <b>cannot pay back</b> the TP sales it displaces. Net margin −$0.024/iti (n.s.).' },
+    ],
+    roadmap: [
+      '<b>Sell it inside Trip Protection</b> as a tier (TP + luggage cover) instead of a standalone add-on that competes with TP.',
+      '<b>Target international first-time bookers</b>: 2.6% attach and $4.05 per sale vs 0.28% and $1.39 for domestic repeat.',
+      '<b>Revisit price on domestic</b>, where margin per sale is only ~$1.4–1.6.',
+      '<b>Judge launches on portfolio margin</b>, not the new product\'s attach rate.',
+    ],
+    note: 'Pilot run 1299620 (Oct 2025): control already showed 0.13% LP attach, so its read is directional.',
+  },
+  {
+    name: 'Onboard CFAR', short: 'CFAR', tag: 'CFAR', img: 'img/cfar.jpg', accent: '#fb923c', accent2: '#e879f9',
+    bside: 'img/cfar.png',
+    id: 'SKYA-10235', run: 'Main run 1330635', dates: '24 Jul – 25 Sep 2026',
+    calculon: ['Flat', '+48.7 LTC IIPD · p = 0.11'],
+    alloc: [2570746, 2572563], bookers: [160568, 160741], calcBookings: [148284, 148184],
+    n: [291232, 292516], any: [8.975, 8.911], total: [0.8849, 0.9069], sd: [4.332, 4.476],
+    products: [
+      ['CFAR', 0, 0.2933, 0, 0.0269, true],
+      ['Trip Protection', 2.654, 2.507, 0.1715, 0.1742],
+      ['CEG', 2.102, 2.075, 0.1925, 0.1861],
+      ['Paid Bags', 3.173, 3.115, 0.4158, 0.4156],
+      ['Paid Seats', 1.578, 1.547, 0.0811, 0.0803],
+      ['Luggage Protection', 0.755, 0.762, 0.024, 0.0238],
+    ],
+    platform: [
+      ['App', 249103, 251293, 0.239, 6.544, 6.358, 0.7925, 0.7942],
+      ['Mobile web', 17696, 17295, 0.619, 7.538, 7.621, 1.0287, 1.1492],
+      ['Desktop web', 24433, 23928, 0.627, 10.588, 11.054, 1.7228, 1.915],
+    ],
+    tpPlatform: [[2.391, 2.205], [3.43, 3.371], [4.776, 5.057]],
+    cross: [
+      ['Dom · Repeat', 143551, 143213, 0.209, 4.64, 1.699, 1.536, 0.4875, 0.468],
+      ['Dom · First', 36844, 36610, 0.467, 4.92, 3.58, 3.095, 0.6107, 0.6003],
+      ['Intl · Repeat', 78531, 80434, 0.292, 14.61, 2.738, 2.805, 1.3519, 1.4207],
+      ['Intl · First', 32306, 32259, 0.474, 14.46, 5.64, 5.406, 1.8285, 1.9221],
+    ],
+    models: [
+      { q: '“Customer wallet is fixed”', v: 'rej', vl: 'Rejected',
+        t: 'Total ancillary margin <b>+$0.022/iti (+2.5%, z≈1.9)</b>. <b>Over 80% of CFAR\'s margin is incremental</b>; bags, seats and luggage protection did not move.' },
+      { q: '“More options = cognitive overload”', v: 'part', vl: 'Screen-dependent',
+        t: '<b>Desktop:</b> other add-ons +0.47pp, margin/iti <b>+11%</b>. <b>App (86% of itineraries):</b> other add-ons <b>−0.19pp</b> (z≈2.7) and CFAR attach only 0.24%: the app flow pays an attention cost.' },
+      { q: '“Protection products substitute each other”', v: 'conf', vl: 'Confirmed',
+        t: '<b>One Trip Protection sale lost for every two CFAR sales</b> (TP attach −5.5%, z≈3.5). Heaviest on domestic first-time bookers (TP −13.5%).' },
+      { q: '“CFAR will drive cancellations”', v: 'rej', vl: 'Rejected (short term)',
+        t: 'Cancellation rate <b>3.17% → 3.06%</b> in treatment. Bookings per variant were flat (148.3K vs 148.2K in Calculon).' },
+    ],
+    roadmap: [
+      '<b>Launch on international routes first:</b> $14.5 per sale and portfolio margin +5% vs domestic $4.6 per sale and −2 to −4%.',
+      '<b>Fix the app placement</b> before scaling: show CFAR and Trip Protection as one protection choice rather than stacked add-ons.',
+      '<b>On domestic, offer CFAR or Trip Protection, not both</b>, based on propensity.',
+      '<b>Track cancellations and claims cost</b> over a full travel cycle before a 100% launch.',
+    ],
+    note: 'Segment margin deltas are directional (no per-segment significance test).',
+  },
+  {
+    name: 'Trip Protection · Japan Domestic', short: 'Trip Prot.', tag: 'TP', img: 'img/trip_protection.jpg', accent: '#34d399', accent2: '#60a5fa',
+    kind: 'Market expansion experiment', sub: 'CEG', subLong: 'CEG (Plus + Premium)',
+    bside: 'img/jpdomestic.png',
+    id: 'FADDON-62', run: 'Main run 1339506 (live). Localized XCover insurance + baggage bundle',
+    dates: '2–26 Oct 2026', decision: 'Accom. IBPD',
+    calculon: ['Running', '−2.0 Accom. IBPD · p = 0.56'],
+    alloc: [34901, 34958], bookers: [7843, 7856], calcBookings: [7150, 7137],
+    n: [9048, 9054], any: [12.025, 13.232], total: [1.3495, 1.4329], sd: [4.745, 4.894],
+    products: [
+      ['Trip Protection', 0, 0.972, 0, 0.0702, true],
+      ['CEG', 2.774, 2.397, 0.3738, 0.3202],
+      ['Paid Bags', 6.532, 6.991, 0.6744, 0.7383],
+      ['Paid Seats', 3.515, 3.855, 0.2916, 0.293],
+      ['Luggage Protection', 0.674, 0.773, 0.0097, 0.0112],
+    ],
+    platform: [
+      ['App', 5754, 5825, 0.979, 11.887, 12.635, 1.3412, 1.4177],
+      ['Mobile web', 2196, 2161, 0.648, 11.111, 12.494, 1.1793, 1.3245],
+      ['Desktop web', 1098, 1068, 1.592, 14.572, 13.015, 1.733, 1.735],
+    ],
+    tpPlatform: [[2.902, 2.506], [1.958, 1.573], [3.734, 3.464]],
+    crossTitle: 'By first / repeat booker',
+    cross: [
+      ['Repeat', 4800, 4898, 0.755, 6.96, 2.083, 2.123, 1.0485, 1.1675],
+      ['First', 4248, 4156, 1.227, 7.41, 3.555, 2.719, 1.6896, 1.7456],
+      ['All JP domestic', 9048, 9054, 0.972, 7.22, 2.774, 2.397, 1.3495, 1.4329],
+    ],
+    models: [
+      { q: '“Customer wallet is fixed”', v: 'rej', vl: 'Rejected so far',
+        t: 'Any-ancillary attach <b>+1.2pp (z≈2.5)</b>. Bags (+0.46pp) and seats (+0.34pp) moved <b>up</b>, not down. Portfolio margin <b>+$0.083/iti (+6%)</b>, not yet significant.' },
+      { q: '“More options = cognitive overload”', v: 'rej', vl: 'Rejected',
+        t: 'Other add-ons <b>rose</b> on app (+0.75pp) and mobile web (+1.4pp) after TP was added. Bookings flat (7,150 vs 7,137 in Calculon). Desktop dipped, on only ~1.1K itineraries per arm.' },
+      { q: '“Protection products substitute each other”', v: 'conf', vl: 'Confirmed again',
+        t: 'CEG attach <b>−14%</b>, and <b>−24% among first-time bookers</b>. CEG revenue loss offsets <b>~3/4 of TP\'s margin</b>, the same ratio as Luggage Protection.' },
+      { q: '“Japanese domestic travellers don\'t buy cover”', v: 'part', vl: 'Partly true',
+        t: 'Attach is <b>0.97%</b>, about 1/3 of Japan international (3.1%), but <b>$7.22 per sale</b> is in line with the global average ($7.00). First-time bookers attach 1.6x repeat.' },
+    ],
+    roadmap: [
+      '<b>Keep it running:</b> ~9K itineraries per arm after 25 days; margin needs ~3x the sample to reach significance.',
+      '<b>Reuse the localization playbook</b> (local currency, copy, bundled baggage cover) for other gaps: Taiwan (0.3%), India (0.5%), Korea domestic (0.1%).',
+      '<b>Present TP and CEG as one protection decision</b>: first-time bookers swap CEG for TP.',
+      '<b>Size is modest:</b> ~$25–30K a year in Japan domestic at current rates. The value is in the repeatable market-entry playbook.',
+    ],
+    note: 'Japan-origin domestic itineraries only; allocated users\' other bookings (5.8K, unbalanced between variants) are excluded. Results are interim.',
+  },
+  {
+    name: 'Seatmap fix · missing aisle', short: 'Paid Seats', tag: 'Seats', img: 'img/paid_seats.jpg', accent: '#22d3ee', accent2: '#a78bfa',
+    kind: 'UI/UX experiment', subtitle: 'What fixing the seatmap did to seat sales, the rest of the portfolio and itineraries', focusLabel: 'Seat attach in treatment', totalMode: 'volume',
+    bside: 'img/missingaisle.png',
+    id: 'SKYA-11089', run: 'Main run 1340744 (live). Bug fix: aisle missing on seatmaps from several connectors',
+    dates: '14–26 Oct 2026',
+    calculon: ['Win', '+324.8 LTC IIPD · p = 0.014'],
+    alloc: [756919, 757688], bookers: [106378, 106868], calcBookings: [68452, 68722],
+    n: [141622, 143603], any: [13.286, 13.518], total: [1.6455, 1.6424], sd: [6.54, 6.225],
+    products: [
+      ['Paid Seats', 3.665, 3.815, 0.2445, 0.2506, true],
+      ['Paid Bags', 7.716, 7.881, 1.0698, 1.0627],
+      ['Trip Protection', 2.093, 2.102, 0.1416, 0.142],
+      ['CEG', 1.28, 1.212, 0.1689, 0.1665],
+      ['Luggage Protection', 0.718, 0.742, 0.0206, 0.0206],
+    ],
+    heroNote: 'Margin per seat sale is unchanged ($6.57 vs $6.67), so the gain is <b>more seat buyers, not higher prices</b>.',
+    // [segment, itisA, itisB, bookersA, bookersB, seatA, seatB, bagA, bagB, marginA, marginB]
+    volPanels: [
+      { title: 'By platform', cols: ['seat', 'bag', 'itis', 'bookers'], rows: [
+        ['App', 107841, 108619, 81605, 82024, 3.548, 3.753, 7.131, 7.416, 158950, 161755],
+        ['Mobile web', 10666, 10885, 9390, 9434, 4.322, 4.428, 9.019, 8.774, 20127, 20468],
+        ['Desktop web', 23115, 24099, 15388, 15412, 3.907, 3.813, 9.842, 9.577, 53959, 53629],
+      ], note: 'Desktop: 94 vs 68 bookers with 10+ itineraries account for 932 of its 984 extra itineraries. Capped at 5 per booker, desktop itineraries are +0.9%.' },
+      { title: 'By route type', cols: ['seat', 'bag', 'itis', 'margin'], rows: [
+        ['Domestic', 90830, 91930, 67055, 67263, 3.111, 3.223, 5.361, 5.579, 85639, 91365],
+        ['International', 50792, 51673, 41510, 42002, 4.654, 4.867, 11.927, 11.977, 147397, 144486],
+      ], note: 'Δ margin = total ancillary margin, adjusted for allocation split. International bag margin is volatile (large fares, few sales).' },
+    ],
+    models: [
+      { q: '“Removing friction lifts attach”', v: 'good', vl: 'Confirmed',
+        t: 'Seat attach <b>+4.1%</b> overall (z≈2.1) and <b>+5.8% on app</b> (z≈2.5), where 76% of itineraries are booked.' },
+      { q: '“Seat and bag decisions are linked”', v: 'good', vl: 'Confirmed on app',
+        t: 'The fix only touched seatmaps, yet <b>app bag attach rose +4.0%</b> (z≈2.5). A smoother seat step carries customers into the next add-on.' },
+      { q: '“Better ancillary UX creates incremental itineraries”', v: 'part', vl: 'Not proven yet',
+        t: 'Itineraries <b>+1.3%</b> and Calculon is significant, but <b>bookers +0.4% (±0.85%)</b>. Half the extra itineraries come from a few desktop heavy bookers; without them it is ~+0.6%.' },
+      { q: '“Bug fixes are low-value work”', v: 'rej', vl: 'Rejected',
+        t: 'A connector fix for a missing aisle is the <b>only significant Calculon win</b> in this set, and total ancillary margin is <b>+1.1%</b>.' },
+    ],
+    roadmap: [
+      '<b>Ship the fix</b> (Calculon: TAKE, LTC IIPD p = 0.014).',
+      '<b>Audit every seatmap and bag connector</b> for rendering gaps: it is the cheapest margin lever we have.',
+      '<b>Instrument the seat and bag steps</b> (errors, drop-off, time on step) to find the next friction point.',
+      '<b>Re-read conversion at the end of the run</b> with itineraries capped per booker before claiming itinerary uplift.',
+    ],
+    note: 'Run is live; results are interim.',
+  },
+  {
+    name: 'Seat selection card · booking form', short: 'Paid Seats', tag: 'Seats', img: 'img/paid_seats.jpg', accent: '#22d3ee', accent2: '#818cf8',
+    kind: 'UI/UX experiment', subtitle: 'What the redesigned seatmap entry point did to seat sales, the rest of the portfolio and itineraries',
+    focusLabel: 'Seat attach in treatment', totalMode: 'volume',
+    bside: 'img/seatentry.png',
+    id: 'SKYA-10737', run: 'Main run 1329334. Redesigned seat selection card (seatmap entry point) on booking form',
+    dates: '15 Jul – 23 Aug 2026',
+    calculon: ['Flat', '+61.5 LTC IIPD · p = 0.20 · B shipped'],
+    alloc: [2403507, 2406326], bookers: [225610, 226874], calcBookings: [196978, 198842],
+    n: [354306, 355880], any: [12.165, 12.056], total: [1.3413, 1.3369], sd: [5.553, 5.547],
+    products: [
+      ['Paid Seats', 3.292, 3.351, 0.1689, 0.1786, true],
+      ['Paid Bags', 6.115, 6.06, 0.8358, 0.8283],
+      ['Trip Protection', 2.207, 2.154, 0.1572, 0.1557],
+      ['CEG', 1.752, 1.739, 0.1535, 0.1499],
+      ['Luggage Protection', 0.691, 0.686, 0.0217, 0.0216],
+    ],
+    heroNote: 'Margin per seat sale <b>+3.9%</b> ($5.13 → $5.33): the more detailed card nudges customers to pricier seats.',
+    volPanels: [
+      { title: 'By platform', cols: ['seat', 'bag', 'itis', 'bookers'], rows: [
+        ['App', 299622, 301339, 184151, 184915, 3.077, 3.065, 5.684, 5.669, 359227, 361690],
+        ['Mobile web', 19980, 20084, 16566, 16902, 4.93, 4.984, 7.352, 6.911, 35948, 33847],
+        ['Desktop web', 34704, 34457, 25019, 25197, 4.198, 4.902, 9.123, 8.979, 80050, 80225],
+      ], note: 'App is 85% of test itineraries and saw no seat lift. The card only paid off on desktop.' },
+      { title: 'By route type', cols: ['seat', 'bag', 'itis', 'margin'], rows: [
+        ['Domestic', 229598, 230552, 144742, 145502, 3.322, 3.291, 4.082, 4.085, 189491, 190630],
+        ['International', 124708, 125328, 90205, 90755, 3.236, 3.462, 9.858, 9.694, 285735, 285133],
+      ], note: 'Margin per seat sale rose on both routes: domestic $4.15 → $4.32, international $6.99 → $7.09.' },
+    ],
+    models: [
+      { q: '“A better entry point sells more seats”', v: 'part', vl: 'Desktop only',
+        t: '<b>Desktop seat attach +17%</b> (z≈4.4) and international +7% (z≈3.1). App flat (−0.4%), so overall only +1.8% (n.s.).' },
+      { q: '“Seat UX changes barely move itineraries”', v: 'good', vl: 'Confirmed',
+        t: 'Bookers <b>+0.4% (±0.6%)</b>, itineraries +0.3%, Calculon flat (p = 0.20). The change sits inside the booking form, after the purchase decision.' },
+      { q: '“Richer seat info raises seat value”', v: 'good', vl: 'Confirmed',
+        t: 'Margin per seat sale <b>+3.9%</b> and seat margin/iti <b>+5.7%</b>. Total ancillary margin is flat because bags and Trip Protection dipped (n.s.).' },
+      { q: '“A desktop win carries over to app”', v: 'rej', vl: 'Rejected',
+        t: 'Same card, <b>desktop +17% vs app 0%</b>. App users reach seats through a different flow, so app needs its own solution.' },
+    ],
+    roadmap: [
+      '<b>Keep it at 100%</b>: neutral on itineraries and margin, positive for desktop seats and seat value.',
+      '<b>Find out why app did not respond</b> (85% of itineraries): card position, tap target, or the seatmap behind it.',
+      '<b>Pair it with the new app seatmap sheet</b>, which lifts app seat attach +8.7% (next slide).',
+      '<b>Track margin per seat sale</b> alongside attach as a seat KPI.',
+    ],
+    note: 'Main run 15 Jul – 23 Aug 2026; B set to 100% after the run.',
+  },
+  {
+    name: 'New seatmap sheet', short: 'Paid Seats', tag: 'Seats', img: 'img/paid_seats.jpg', accent: '#a78bfa', accent2: '#22d3ee',
+    kind: 'UI/UX experiment', subtitle: 'What the redesigned seatmap did to seat sales, the rest of the portfolio and itineraries',
+    focusLabel: 'Seat attach in treatment', totalMode: 'volume',
+    bside: 'img/seatmap%20ab.png',
+    id: 'SKYA-10816', run: 'Main run 1341491 (live). Redesigned seat map selection sheet',
+    dates: '19–26 Oct 2026',
+    calculon: ['Flat', '−177 LTC IIPD · p = 0.83 · running'],
+    alloc: [331331, 330074], bookers: [57601, 57097], calcBookings: [28739, 28417],
+    n: [75857, 75241], any: [14.107, 14.329], total: [1.7312, 1.7158], sd: [6.628, 6.347],
+    products: [
+      ['Paid Seats', 4.582, 4.839, 0.3056, 0.3156, true],
+      ['Paid Bags', 7.894, 7.996, 1.061, 1.0571],
+      ['CEG', 1.379, 1.216, 0.1877, 0.1706],
+      ['Trip Protection', 2.059, 2.053, 0.1566, 0.1506],
+      ['Luggage Protection', 0.67, 0.726, 0.0203, 0.022],
+    ],
+    heroNote: 'Margin per seat sale $6.52 vs $6.67: the extra seat buyers choose <b>slightly cheaper seats</b>.',
+    volPanels: [
+      { title: 'By platform', cols: ['seat', 'bag', 'itis', 'bookers'], rows: [
+        ['App', 57875, 57255, 45039, 44568, 4.333, 4.711, 7.35, 7.521, 89084, 89138],
+        ['Mobile web', 5407, 5145, 4686, 4538, 6.159, 6.628, 9.303, 9.504, 11621, 11178],
+        ['Desktop web', 12575, 12841, 7878, 7992, 5.05, 4.696, 9.789, 9.509, 30619, 28784],
+      ], note: 'App is 76% of test itineraries. CEG attach fell on app (1.30% → 1.15%) and desktop (1.73% → 1.42%).' },
+      { title: 'By route type', cols: ['seat', 'bag', 'itis', 'margin'], rows: [
+        ['Domestic', 48067, 48210, 36007, 35851, 4.009, 4.196, 5.486, 5.488, 48083, 48174],
+        ['International', 27790, 27031, 22722, 22330, 5.574, 5.986, 12.058, 12.467, 83241, 80927],
+      ], note: 'Δ margin = total ancillary margin, adjusted for allocation split. One week of data.' },
+    ],
+    models: [
+      { q: '“A better seatmap sells more seats”', v: 'good', vl: 'Confirmed on app',
+        t: '<b>App seat attach +8.7%</b> (z≈3.1), overall +5.6% (z≈2.4). Desktop −7% (n.s.).' },
+      { q: '“Seat UX changes barely move itineraries”', v: 'good', vl: 'Confirmed so far',
+        t: 'Bookers <b>−0.5% (±1.2%)</b>, itineraries −0.4%, Calculon flat (p = 0.83). The range is still wide after one week.' },
+      { q: '“Seat gains are pure upside”', v: 'part', vl: 'Watch: CEG −12%',
+        t: 'CEG attach <b>−12%</b> (z≈−2.8). The CEG loss (−$0.017/iti) is larger than the seat gain (+$0.010/iti), so total ancillary margin is <b>−1.3%</b>.' },
+      { q: '“One design fits every platform”', v: 'rej', vl: 'Rejected',
+        t: '<b>App +8.7% vs desktop −7%</b> on seat attach. Mirror image of the entry-point card, which only worked on desktop.' },
+    ],
+    roadmap: [
+      '<b>Keep running</b> to confirm the CEG drop; one week and ~75K itineraries per arm so far.',
+      '<b>Check the funnel after the seat step</b>: does the new sheet delay or hide the CEG offer?',
+      '<b>Ship on app if CEG recovers</b>; keep the current seatmap on desktop and iterate there.',
+      '<b>Judge seat UX on ancillary margin, not itineraries</b>: conversion impact is negligible.',
+    ],
+    note: 'Run is live; one week of data, results are interim.',
+  },
+  {
+    name: 'Hide CEG Premium', short: 'CEG Plus', tag: 'CEG', img: 'img/ceg_premium.jpg', accent: '#fbbf24', accent2: '#c084fc',
+    aside: 'img/cegpremium_2tiers.png',
+    kind: 'UI/UX experiment', subtitle: 'Offering only CEG Plus instead of two tiers: what it did to CEG, the portfolio and itineraries',
+    focusLabel: 'CEG Plus attach (Premium hidden)',
+    id: 'FADDON-161', run: 'Main run 1332158. CEG Premium hidden, only CEG Plus offered',
+    dates: '6–31 Aug 2026',
+    calculon: ['Flat', '−7.4 LTC IIPD · p = 0.53 · stopped'],
+    alloc: [1777659, 1777840], bookers: [259706, 259549], calcBookings: [231330, 231745],
+    n: [351071, 351916], any: [11.423, 11.544], total: [1.2432, 1.2168], sd: [5.241, 5.173],
+    products: [
+      ['CEG Plus', 1.752, 2.357, 0.1309, 0.1759, true],
+      ['CEG Premium', 0.339, 0, 0.0678, 0],
+      ['Paid Bags', 5.372, 5.331, 0.7117, 0.7061],
+      ['Paid Seats', 2.584, 2.461, 0.1329, 0.128],
+      ['Trip Protection', 2.478, 2.517, 0.175, 0.1813],
+      ['Luggage Protection', 0.691, 0.7, 0.0205, 0.0215],
+    ],
+    heroNote: 'CEG overall: buyers <b>+13%</b> (2.09% → 2.36%) but CEG revenue/iti <b>−11%</b> ($0.199 → $0.176). Plus sells at ~$7.5 vs ~$20 for Premium.',
+    country: { mode: 'premium', title: 'By origin country (top 10 by itineraries)', rows: [
+      ['Thailand', 96457, 95615, 69051, 68740, 1.209, 0.154, 1.483, 0.1079, 0.1085, 105945, 106707],
+      ['Indonesia', 64386, 64793, 42339, 42150, 1.135, 0.104, 1.442, 0.0956, 0.1044, 30742, 30729],
+      ['Malaysia', 46209, 46557, 33386, 33790, 1.562, 0.275, 1.454, 0.1496, 0.1077, 59725, 57523],
+      ['South Korea', 40134, 40510, 34982, 35371, 4.151, 0.76, 4.673, 0.4174, 0.3642, 62799, 62188],
+      ['Philippines', 22994, 22963, 17665, 17652, 1.496, 0.304, 1.646, 0.1493, 0.1226, 41463, 40715],
+      ['Japan', 20680, 20838, 17704, 17805, 4.985, 0.832, 5.811, 0.4759, 0.4343, 47433, 45601],
+      ['Singapore', 19925, 20059, 15840, 15807, 3.217, 0.602, 3.23, 0.3138, 0.2363, 39584, 37819],
+      ['Vietnam', 16656, 17153, 12291, 12212, 2.089, 0.258, 2.285, 0.1839, 0.165, 16349, 15944],
+      ['India', 12508, 12260, 10320, 10112, 1.975, 0.24, 2.243, 0.1811, 0.1702, 7152, 6791],
+      ['Hong Kong', 4698, 4626, 3988, 3973, 3.746, 0.532, 4.28, 0.3433, 0.3156, 8231, 7776],
+    ], note: 'Δ CEG buyers = Plus attach in B vs all CEG attach in A. Thailand and Indonesia (low Premium share) gain buyers at flat or higher CEG revenue; markets with more Premium buyers lose 6–28%.' },
+    models: [
+      { q: '“Two tiers help customers choose”', v: 'rej', vl: 'Rejected',
+        t: 'Plus alone sold to <b>13% more customers</b> than Plus + Premium (2.36% vs 2.09%, z≈9). The second tier deters about 1 in 8 buyers.' },
+      { q: '“Premium buyers will take Plus instead”', v: 'conf', vl: 'Confirmed',
+        t: 'All Premium demand (0.34%) moved to Plus, plus new buyers. But at ~$7.5 vs ~$20 per sale, <b>CEG revenue fell 11%</b> and total $/iti −2.1% (z≈2.1).' },
+      { q: '“Hiding an option costs itineraries”', v: 'good', vl: 'No impact',
+        t: 'Bookers <b>−0.1% (±0.5%)</b>, itineraries +0.2%, Calculon flat (p = 0.53). The CEG offer comes after the purchase decision.' },
+      { q: '“One tier setup fits every market”', v: 'rej', vl: 'Rejected',
+        t: '<b>Thailand and Indonesia</b>: CEG buyers +23–27%, revenue flat or up. <b>Singapore, Malaysia, Philippines</b>: CEG revenue −18 to −28%.' },
+    ],
+    roadmap: [
+      '<b>Keep Premium visible</b>: Plus-only gains buyers but loses revenue in 8 of the top 10 markets.',
+      '<b>Next test: hide Plus instead</b> and push everyone to Premium (next slide).',
+      '<b>Thailand and Indonesia respond to a cheap tier</b>: candidates for market-level tier setup.',
+      '<b>Re-read on net CEG margin</b> (service cost and claims), not booking-time revenue.',
+    ],
+    note: 'Main run 6–31 Aug 2026; Calculon outcome Flat (stopped). Seat attach −4.8%* has no plausible link to CEG; treat as noise.',
+  },
+  {
+    name: 'Hide CEG Plus', short: 'CEG Premium', tag: 'CEG', img: 'img/ceg_premium.jpg', accent: '#fbbf24', accent2: '#f472b6',
+    aside: 'img/cegpremium_2tiers.png',
+    kind: 'UI/UX experiment', subtitle: 'Offering only CEG Premium instead of two tiers: what it did to CEG, the portfolio and itineraries',
+    focusLabel: 'CEG Premium attach (Plus hidden)',
+    id: 'FADDON-370', run: 'Eval run 1340523 after flat main run 1338363. Only CEG Premium offered',
+    dates: '13–25 Oct 2026', days: 13,
+    calculon: ['Win', '+318 LTC IIPD · p = 0.018 · B at 100%'],
+    alloc: [653513, 652549], bookers: [134957, 135262], calcBookings: [97158, 98024],
+    n: [172513, 175275], any: [12.208, 11.573], total: [1.3945, 1.4498], sd: [5.749, 6.018],
+    products: [
+      ['CEG Premium', 0.275, 1.206, 0.055, 0.2411, true],
+      ['CEG Plus', 1.678, 0, 0.1244, 0],
+      ['Paid Bags', 6.181, 6.095, 0.8285, 0.8178],
+      ['Paid Seats', 3.161, 3.144, 0.2057, 0.2037],
+      ['Trip Protection', 2.299, 2.367, 0.162, 0.1688],
+      ['Luggage Protection', 0.643, 0.64, 0.0189, 0.0186],
+    ],
+    heroNote: 'CEG buyers <b>−38%</b> but CEG revenue/iti <b>+34%</b>.',
+    country: { mode: 'plus', title: 'By origin country (top 10 by itineraries)', rows: [
+      ['Thailand', 49465, 49417, 39520, 39370, 1.187, 0.123, 0.712, 0.1115, 0.1425, 62648, 65572],
+      ['Malaysia', 25152, 25306, 19100, 19357, 1.109, 0.139, 0.636, 0.1086, 0.1272, 33868, 34850],
+      ['Indonesia', 24867, 24269, 18001, 17855, 1.122, 0.117, 0.655, 0.1047, 0.131, 14863, 14961],
+      ['South Korea', 15282, 15475, 13284, 13411, 3.854, 0.772, 3.244, 0.4463, 0.6488, 31329, 33315],
+      ['Philippines', 15249, 15100, 12280, 12162, 1.2, 0.19, 0.881, 0.1281, 0.1762, 24749, 26563],
+      ['Singapore', 10799, 11167, 8930, 9162, 2.297, 0.444, 1.737, 0.2576, 0.3475, 23164, 24572],
+      ['Japan', 10144, 10183, 8815, 8891, 3.618, 0.868, 3.319, 0.4463, 0.6639, 24756, 28974],
+      ['Vietnam', 8913, 9310, 6778, 6916, 1.627, 0.135, 0.913, 0.1455, 0.1826, 8045, 7876],
+      ['India', 6084, 6081, 5301, 5238, 1.216, 0.197, 0.954, 0.1325, 0.1908, 4345, 4331],
+      ['Hong Kong', 3283, 5037, 1593, 1676, 1.828, 0.64, 1.211, 0.262, 0.2422, 4967, 5675],
+    ], note: 'Upgrade = share of control Plus buyers who bought Premium instead ((Premium B − Premium A) / Plus A). Hong Kong: 5.0K vs 3.3K itineraries on ~1.6K bookers per arm (heavy bookers).' },
+    models: [
+      { q: '“Customers trade down, not up”', v: 'rej', vl: 'Rejected',
+        t: 'With Plus gone, <b>55% of Plus buyers bought Premium</b> at ~2.7x the price. Japan and South Korea upgrade most (63–68%), Malaysia least (45%, excl. Hong Kong).' },
+      { q: '“Fewer options = more buyers”', v: 'part', vl: 'Depends on price',
+        t: 'CEG buyers <b>fell 38%</b> here but <b>rose 13%</b> when Premium was hidden. Buyer count follows the price of the remaining tier, not the number of tiers.' },
+      { q: '“Hiding an option costs itineraries”', v: 'good', vl: 'No impact',
+        t: 'Bookers <b>+0.4% (±0.75%)</b>. Itineraries +1.8%, mostly Hong Kong heavy bookers; Calculon\'s win is driven by CEG revenue.' },
+      { q: '“Upsell works in every market”', v: 'good', vl: 'Confirmed',
+        t: 'CEG $/iti up in <b>9 of the top 10 markets</b> (+17% to +49%). Only Hong Kong is down, where heavy bookers distort the data.' },
+    ],
+    roadmap: [
+      '<b>Keep Premium-only</b> (B at 100%): total ancillary $/iti <b>+4.0%</b> (z≈2.8).',
+      '<b>Validate on net CEG margin</b>: Premium carries more coverage, so booking-time revenue overstates the gain.',
+      '<b>Win back the 45% who walked away</b>: offer a lighter tier post-booking or in Thailand / Indonesia, where a cheap tier lifts buyers.',
+      '<b>Try price points above $20</b> in Japan and South Korea, where upgrade rates are highest.',
+    ],
+    note: 'Eval run 13–25 Oct 2026; main run 24 Sep – 12 Oct was flat (p = 0.19).',
+  },
+];
+
+const zProp = (pA, pB, nA, nB) => {
+  const p = (pA * nA + pB * nB) / (nA + nB) / 100;
+  const se = Math.sqrt(p * (1 - p) * (1 / nA + 1 / nB));
+  return se ? (pB - pA) / 100 / se : 0;
+};
+const sgn = v => (v > 0 ? '+' : v < 0 ? '−' : '±');
+const fmtPP = v => sgn(v) + Math.abs(v).toFixed(2) + 'pp';
+const fmtRel = v => Math.abs(v) < 0.05 ? '0.0%' : sgn(v) + Math.abs(v).toFixed(1) + '%';
+const fmtD = v => sgn(v) + '$' + Math.abs(v).toFixed(3);
+const cls = (v, sig) => (!sig ? 'ns' : v > 0 ? 'pos' : 'neg');
+const dbar = (v, max, c) => {
+  const w = Math.min(50, Math.abs(v) / max * 50);
+  return `<span class="dbar"><i style="${v >= 0 ? 'left:50%' : `left:${50 - w}%`};width:${w}%;background:${c}"></i></span>`;
+};
+
+function expSlide(e, idx) {
+  const [nA, nB] = e.n;
+  const dTot = e.total[1] - e.total[0];
+  const zTot = dTot / Math.sqrt(e.sd[0] ** 2 / nA + e.sd[1] ** 2 / nB);
+  const nw = e.products.find(p => p[5]);
+  const others = e.products.filter(p => !p[5]);
+  const dOther = others.filter(p => !['Paid Bags', 'Paid Seats'].includes(p[0])).reduce((a, p) => a + p[4] - p[3], 0);
+  const prodRows = e.products.map(p => {
+    const rel = p[1] ? (p[2] - p[1]) / p[1] * 100 : null;
+    const z = zProp(p[1], p[2], nA, nB), sig = Math.abs(z) >= 1.96;
+    const c = !sig ? 'rgba(142,154,192,.6)' : rel == null || rel > 0 ? '#4ade80' : '#fb7185';
+    return `<tr class="${p[5] ? 'new' : ''}"><td>${p[0]}</td><td class="dim">${fmtPct(p[1])}</td><td>${p[1] && p[2] === 0 ? '<span class="dim">hidden</span>' : fmtPct(p[2])}</td>
+      <td class="${rel == null ? 'pos' : cls(rel, sig)}">${rel == null ? 'new' : fmtRel(rel)}${sig && rel != null ? '*' : ''}${dbar(rel == null ? 8 : rel, 8, c)}</td>
+      <td class="${p[4] - p[3] >= 0 ? 'pos' : 'neg'}" style="opacity:${p[5] || sig ? 1 : .6}">${fmtD(p[4] - p[3])}</td></tr>`;
+  }).join('');
+  const zAny = zProp(e.any[0], e.any[1], nA, nB);
+  const totRows = `
+    <tr class="tot"><td>Any ancillary</td><td class="dim">${fmtPct(e.any[0])}</td><td>${fmtPct(e.any[1])}</td>
+      <td class="${cls(e.any[1] - e.any[0], Math.abs(zAny) >= 1.96)}">${fmtPP(e.any[1] - e.any[0])}${Math.abs(zAny) >= 1.96 ? '*' : ''}</td>
+      <td class="${cls(dTot, Math.abs(zTot) >= 1.96)}">${fmtD(dTot)}</td></tr>`;
+  const pfRows = (e.platform || []).map((r, i) => {
+    const dO = r[5] - r[4], zO = zProp(r[4], r[5], r[1], r[2]);
+    const tp = e.tpPlatform[i], dTp = (tp[1] - tp[0]) / tp[0] * 100, zTp = zProp(tp[0], tp[1], r[1], r[2]);
+    const dM = (r[7] - r[6]) / r[6] * 100;
+    return `<tr><td>${r[0]}<span style="color:#8e9ac0;font-size:10.5px"> ${Math.round(r[1] / nA * 100)}%</span></td><td>${fmtPct(r[3])}</td>
+      <td class="${cls(dTp, Math.abs(zTp) >= 1.96)}">${fmtRel(dTp)}${Math.abs(zTp) >= 1.96 ? '*' : ''}</td>
+      <td class="${cls(dO, Math.abs(zO) >= 1.96)}">${fmtPP(dO)}${Math.abs(zO) >= 1.96 ? '*' : ''}</td>
+      <td class="${dM >= 0 ? 'pos' : 'neg'}">${fmtRel(dM)}</td></tr>`;
+  }).join('');
+  const crRows = (e.cross || []).map(r => {
+    const dTp = (r[6] - r[5]) / r[5] * 100, zTp = zProp(r[5], r[6], r[1], r[2]);
+    const dM = (r[8] - r[7]) / r[7] * 100;
+    return `<tr><td>${r[0]}</td><td>${fmtPct(r[3])}</td><td class="dim">$${r[4].toFixed(2)}</td>
+      <td class="${cls(dTp, Math.abs(zTp) >= 1.96)}">${fmtRel(dTp)}${Math.abs(zTp) >= 1.96 ? '*' : ''}</td>
+      <td class="${dM >= 0 ? 'pos' : 'neg'}">${fmtRel(dM)}</td></tr>`;
+  }).join('');
+  const r = e.alloc[1] / e.alloc[0];
+  const volD = (b, a) => (b / (a * r) - 1) * 100;
+  const dItis = volD(nB, nA), dBk = volD(e.bookers[1], e.bookers[0]);
+  const ciBk = 1.96 * Math.sqrt(1 / e.bookers[0] + 1 / e.bookers[1]) * 100;
+  const dCalc = volD(e.calcBookings[1], e.calcBookings[0]);
+  const ipb = [nA / e.bookers[0], nB / e.bookers[1]];
+  const volCls = v => Math.abs(v) < ciBk ? 'color:#c3cbe6' : v > 0 ? 'color:#4ade80' : 'color:#fb7185';
+  const vol = `
+        <div class="kpi vol">
+          <div class="kpi-label">Impact on total itineraries</div>
+          <div class="vgrid">
+            <div><b style="${volCls(dItis)}">${fmtRel(dItis)}</b><span>itineraries<br>${fmtNum(nA)} → ${fmtNum(nB)}</span></div>
+            <div><b style="${volCls(dBk)}">${fmtRel(dBk)}</b><span>bookers<br>95% CI ±${ciBk.toFixed(1)}%</span></div>
+            <div><b>${ipb[1].toFixed(3)}</b><span>itins / booker<br>A ${ipb[0].toFixed(3)}</span></div>
+          </div>
+          <div class="vfoot">${Math.abs(dBk) < ciBk ? '<b>No significant change</b> in bookers.' : `<b>Significant ${dBk > 0 ? 'gain' : 'loss'}</b> in bookers.`} Calculon bookings ${fmtRel(dCalc)}. Adjusted for allocation split (B/A ${r.toFixed(4)}).</div>
+        </div>`;
+  const volPanel = vp => {
+    const head = { seat: 'Δ seats', bag: 'Δ bags', itis: 'Δ itins', bookers: 'Δ bookers', margin: 'Δ margin' };
+    const cell = (c, x) => {
+      if (c === 'seat' || c === 'bag') {
+        const [a, b] = c === 'seat' ? [x[5], x[6]] : [x[7], x[8]];
+        const d = (b - a) / a * 100, sig = Math.abs(zProp(a, b, x[1], x[2])) >= 1.96;
+        return `<td class="${cls(d, sig)}">${fmtRel(d)}${sig ? '*' : ''}</td>`;
+      }
+      const [a, b] = c === 'itis' ? [x[1], x[2]] : c === 'bookers' ? [x[3], x[4]] : [x[9], x[10]];
+      const d = volD(b, a);
+      return `<td class="${d >= 0 ? 'pos' : 'neg'}">${fmtRel(d)}</td>`;
+    };
+    return `
+          <div class="glass panel">
+            <div class="panel-title">${vp.title}</div>
+            <table class="xt">
+              <tr><th>Segment</th>${vp.cols.map(c => `<th>${head[c]}</th>`).join('')}</tr>
+              ${vp.rows.map(x => `<tr><td>${x[0]}</td>${vp.cols.map(c => cell(c, x)).join('')}</tr>`).join('')}
+            </table>
+            <div class="note-sm">${vp.note}</div>
+          </div>`;
+  };
+  const totM = [nA * e.total[0], nB * e.total[1]], dTotM = volD(totM[1], totM[0]);
+  const gainDay = e.days ? (totM[1] / r - totM[0]) / e.days * 2 : 0, gainDayRate = e.days ? dTot * nB / e.days * 2 : 0;
+  const shot = e.bside ? [e.bside, 'B', 'treatment'] : e.aside ? [e.aside, 'A', 'control'] : null;
+  const ctyPanel = c => {
+    const head = c.mode === 'plus' ? ['Plus A', 'Premium A → B', 'Upgrade'] : ['CEG A', 'Plus B', 'Δ CEG buyers'];
+    const rows = c.rows.map(([n, iA, iB, bA, bB, p, q, t, cA, cB, mA, mB]) => {
+      const dCeg = (cB - cA) / cA * 100, dM = ((mB / iB) / (mA / iA) - 1) * 100, dB = volD(bB, bA);
+      let mid;
+      if (c.mode === 'plus') mid = `<td class="dim">${fmtPct(p)}</td><td>${fmtPct(q)} → ${fmtPct(t)}</td><td>${Math.round((t - q) / p * 100)}%</td>`;
+      else {
+        const d = (t - p) / p * 100, sig = Math.abs(zProp(p, t, iA, iB)) >= 1.96;
+        mid = `<td class="dim">${fmtPct(p)}</td><td>${fmtPct(t)}</td><td class="${cls(d, sig)}">${fmtRel(d)}${sig ? '*' : ''}</td>`;
+      }
+      return `<tr><td>${n}<span style="color:#8e9ac0;font-size:10.5px"> ${fmtNum(iA + iB)}</span></td>${mid}<td class="${dCeg >= 0 ? 'pos' : 'neg'}">${fmtRel(dCeg)}</td><td class="${dM >= 0 ? 'pos' : 'neg'}">${fmtRel(dM)}</td><td class="dim">${fmtRel(dB)}</td></tr>`;
+    }).join('');
+    return `
+          <div class="glass panel span2">
+            <div class="panel-title">${c.title}</div>
+            <table class="xt tight">
+              <tr><th>Origin country · itins</th>${head.map(h => `<th>${h}</th>`).join('')}<th>Δ CEG $/iti</th><th>Δ total $/iti</th><th>Δ bookers</th></tr>
+              ${rows}
+            </table>
+            <div class="note-sm">${c.note}</div>
+          </div>`;
+  };
+  const models = e.models.map(m => `
+    <div class="mtile"><div class="mq"><b>${m.q}</b><span class="vd ${m.v}">${m.vl}</span></div><p>${m.t}</p></div>`).join('');
+  return `
+  <section class="slide exp" style="--accent:${e.accent};--accent2:${e.accent2}">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+    <div class="header">
+      <div>
+        <div class="eyebrow">${e.kind || 'New ancillary experiment'} · ${idx + 1} / ${EXPERIMENTS.length}</div>
+        <div class="title"><span>${e.name}</span></div>
+        <div class="subtitle">${e.subtitle || 'What adding it did to the whole ancillary portfolio, and which mental models hold up'}</div>
+      </div>
+      <div class="chips">
+        <div class="glass chip">${e.id} · ${e.dates}</div>
+        <div class="glass chip">${fmtNum(nA + nB)} itineraries in test</div>
+        ${shot ? `<button class="glass chip bside-btn" data-img="${shot[0]}" data-cap="${e.name} · ${shot[1]}-side (${shot[2]})">&#9638; View ${shot[1]}-side</button>` : ''}
+      </div>
+    </div>
+
+    <div class="body">
+      <div class="glass hero">
+        <div class="hero-img"><img src="${e.img}" alt="${e.name}"></div>
+        <div class="meta"><b>Test:</b> ${e.run}. 50/50 user split.<br><b>Decision metric:</b> ${e.decision || 'Flights LTC IIPD'}</div>
+        <div class="kpi">
+          <div class="kpi-label">${e.focusLabel || e.short + ' attach in treatment'}</div>
+          <div class="kpi-value accent">${fmtPct(nw[2])}</div>
+          <div class="kpi-sub">${nw[1] ? `vs ${fmtPct(nw[1])} in control · ${fmtRel((nw[2] - nw[1]) / nw[1] * 100)} (z = ${zProp(nw[1], nw[2], nA, nB).toFixed(1)})` : `$${(nw[4] / nw[2] * 100).toFixed(2)} margin per sale · ${fmtUsd(nw[4])} per itinerary`}</div>
+        </div>
+        <div class="kpi-row">
+          ${e.days ? `<div class="kpi"><div class="kpi-label">Margin gain / day</div><div class="kpi-value" style="color:#4ade80">+$${(gainDay / 1000).toFixed(1)}K</div><div class="kpi-sub">${fmtD(dTot)}/iti · ${fmtRel(dTot / e.total[0] * 100)} · z = ${zTot.toFixed(1)}</div></div>`
+          : e.totalMode === 'volume'
+            ? `<div class="kpi"><div class="kpi-label">Total anc. margin</div><div class="kpi-value" style="color:${Math.abs(dTotM) < 0.05 ? '#e2e8f0' : dTotM > 0 ? '#4ade80' : '#fb7185'}">${fmtRel(dTotM)}</div><div class="kpi-sub">$/iti flat (${fmtD(dTot)})</div></div>`
+            : `<div class="kpi"><div class="kpi-label">Portfolio $/iti</div><div class="kpi-value" style="color:${dTot >= 0 ? '#4ade80' : '#fb7185'}">${fmtD(dTot)}</div><div class="kpi-sub">${fmtRel(dTot / e.total[0] * 100)} · z = ${zTot.toFixed(1)}</div></div>`}
+          <div class="kpi"><div class="kpi-label">Calculon</div><div class="kpi-value" ${e.calculon[0] === 'Win' ? 'style="color:#4ade80"' : ''}>${e.calculon[0]}</div><div class="kpi-sub">${e.calculon[1]}</div></div>
+        </div>
+        ${vol}
+        ${e.heroNote ? `<div class="meta">${e.days ? `<b>Gain/day</b> = B − A ancillary margin per day × 2 (50/50 split): ~$${(gainDay * 365 / 1e6).toFixed(2)}M a year; $${(gainDayRate / 1000).toFixed(1)}K/day from higher $/iti alone. ` : ''}${e.heroNote}</div>` : `<div class="meta">Of ${e.short}'s ${fmtUsd(nw[4])}/iti, <b>${Math.round(Math.max(0, -dOther) / nw[4] * 100)}%</b> (${fmtUsd(Math.max(0, -dOther))}) was taken from other non-airline add-ons. Bags and seats attach did not move significantly.</div>`}
+      </div>
+
+      <div class="right">
+        <div class="ex-row1">
+          <div class="glass panel">
+            <div class="panel-title">Portfolio impact: control vs treatment</div>
+            <table class="xt">
+              <tr><th>Product</th><th>Attach A</th><th>Attach B</th><th>Δ attach</th><th>Δ $/iti</th></tr>
+              ${prodRows}${totRows}
+            </table>
+          </div>
+          ${e.country ? ctyPanel(e.country) : e.volPanels ? e.volPanels.map(volPanel).join('') : `<div class="glass panel">
+            <div class="panel-title">By platform</div>
+            <table class="xt">
+              <tr><th>Platform</th><th>${e.tag}</th><th>Δ ${e.sub || 'TP'}</th><th>Δ other</th><th>Δ $/iti</th></tr>
+              ${pfRows}
+            </table>
+            <div class="note-sm">Other = bags, seats, ${e.tag === 'LP' ? 'CEG' : e.tag === 'TP' ? 'CEG, luggage protection' : 'CEG, luggage protection'} (any of). % after platform = share of test itineraries.</div>
+          </div>
+          <div class="glass panel">
+            <div class="panel-title">${e.crossTitle || 'By route × first / repeat booker'}</div>
+            <table class="xt">
+              <tr><th>Segment</th><th>${e.tag}</th><th>$/sale</th><th>Δ ${e.sub || 'TP'}</th><th>Δ $/iti</th></tr>
+              ${crRows}
+            </table>
+            <div class="note-sm">Δ ${e.sub || 'TP'} = relative change in ${e.subLong || 'Trip Protection'} attach.</div>
+          </div>`}
+        </div>
+        <div class="ex-row2">
+          <div class="glass models">
+            <div class="panel-title">Mental models tested</div>
+            <div class="mgrid">${models}</div>
+          </div>
+          <div class="glass insights">
+            <div class="panel-title">Roadmap implications</div>
+            <ul>${e.roadmap.map(t => `<li>${t}</li>`).join('')}</ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="note">
+        A = control, B = treatment. Users allocated to one variant (trafficdw.user_exp_runs_daily) joined to their flight itineraries (bi_dw.fact_booking_flights via tracking cookie; Agoda whitelabel; cancelled bookings included).
+        * = attach difference significant at 95% (two-proportion z-test). Margin = booking-time values (CEG = revenue). ${e.note}
+      </div>
+      <div>Flights Ancillaries · Product Learnings</div>
+    </div>
+  </section>`;
+}
+
+const only = new URLSearchParams(location.search).get('s');
+if (only) {
+  document.body.classList.add('single');
+  document.getElementById('deck').innerHTML = only === '0' ? overviewSlide() : slide(ANCILLARIES[only - 1], only - 1);
+} else {
+  const deck = document.getElementById('deck');
+  deck.innerHTML = titleSlide() + catalogSlide() + overviewSlide() + ANCILLARIES.map(slide).join('') + platformSlide() + leversSlide() + EXPERIMENTS.map(expSlide).join('') + surveySlide() + travelSureSlide() + opportunitySlide() + waterfallSlide();
+  document.body.classList.add('present');
+  document.body.insertAdjacentHTML('beforeend', `
+    <button class="nav-btn prev" aria-label="Previous slide">&#8249;</button>
+    <button class="nav-btn next" aria-label="Next slide">&#8250;</button>
+    <div class="nav-bar"><span class="count"></span><button class="fs" title="Fullscreen (F)">&#x26F6; Fullscreen</button></div>
+    <div class="bside-modal"><div class="bside-box"><button class="bside-close" aria-label="Close">&times;</button><img alt=""><div class="bside-cap"></div></div></div>`);
+  const modal = document.querySelector('.bside-modal');
+  const closeModal = () => modal.classList.remove('open');
+  deck.addEventListener('click', ev => {
+    const b = ev.target.closest('.bside-btn');
+    if (!b) return;
+    modal.querySelector('img').src = b.dataset.img;
+    modal.querySelector('.bside-cap').textContent = b.dataset.cap;
+    modal.classList.add('open');
+  });
+  modal.addEventListener('click', ev => { if (ev.target === modal || ev.target.closest('.bside-close')) closeModal(); });
+  const slides = [...deck.querySelectorAll('.slide')];
+  const prevBtn = document.querySelector('.nav-btn.prev'), nextBtn = document.querySelector('.nav-btn.next');
+  const count = document.querySelector('.nav-bar .count');
+  let cur = 0;
+  const go = n => {
+    cur = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((el, i) => el.classList.toggle('active', i === cur));
+    prevBtn.disabled = cur === 0;
+    nextBtn.disabled = cur === slides.length - 1;
+    count.textContent = `${cur + 1} / ${slides.length}`;
+    history.replaceState(null, '', '#' + (cur + 1));
+  };
+  const fit = () => {
+    const pad = document.fullscreenElement ? 0 : 24;
+    deck.style.setProperty('--k', Math.min((innerWidth - pad) / 1600, (innerHeight - pad) / 900));
+  };
+  const toggleFs = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  prevBtn.onclick = () => go(cur - 1);
+  nextBtn.onclick = () => go(cur + 1);
+  document.querySelector('.nav-bar .fs').onclick = toggleFs;
+  document.addEventListener('keydown', e => {
+    if (modal.classList.contains('open')) {
+      if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') closeModal();
+      return;
+    }
+    if ((e.key === 'b' || e.key === 'B') && slides[cur].querySelector('.bside-btn')) slides[cur].querySelector('.bside-btn').click();
+    else if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); go(cur + 1); }
+    else if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); go(cur - 1); }
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(slides.length - 1);
+    else if (e.key === 'f' || e.key === 'F') toggleFs();
+  });
+  let idle;
+  document.addEventListener('mousemove', () => {
+    document.body.classList.remove('idle');
+    clearTimeout(idle);
+    idle = setTimeout(() => document.body.classList.add('idle'), 2500);
+  });
+  window.addEventListener('resize', fit);
+  fit();
+  go((parseInt(location.hash.slice(1), 10) || 1) - 1);
+}
+</script>
+</body>
+</html>
